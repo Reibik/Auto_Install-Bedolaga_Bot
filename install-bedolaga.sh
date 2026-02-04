@@ -7,6 +7,13 @@ YELLOW="\033[0;33m"
 BLUE="\033[0;34m"
 NC="\033[0m" # Без цвета
 
+# Заголовок
+function print_header() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${GREEN}        УСТАНОВКА BEDOLAGA BOT          ${NC}"
+    echo -e "${BLUE}========================================${NC}"
+}
+
 # Функция для вывода сообщения в зеленом цвете
 function print_success() {
     echo -e "${GREEN}$1${NC}"
@@ -101,7 +108,9 @@ function start_services() {
 # Функция для отображения меню
 function display_menu() {
     while true; do
-        echo -e "\n${BLUE}Меню установки Bedolaga${NC}"
+        echo -e "\n${BLUE}========================================${NC}"
+        echo -e "${GREEN}        МЕНЮ УСТАНОВКИ BEDOLAGA          ${NC}"
+        echo -e "${BLUE}========================================${NC}"
         echo "1. Установить зависимости"
         echo "2. Клонировать репозитории"
         echo "3. Сгенерировать файлы .env"
@@ -123,6 +132,7 @@ function display_menu() {
 }
 
 # Основной блок выполнения скрипта
+print_header
 if [[ $1 == "--auto" ]]; then
     print_info "Запуск в режиме автоматической установки..."
     install_dependencies
