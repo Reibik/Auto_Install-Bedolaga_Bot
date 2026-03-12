@@ -18,6 +18,9 @@ CABINET_REPO="https://github.com/BEDOLAGA-DEV/bedolaga-cabinet.git"
 BOT_VER_TXT=""
 CAB_VER_TXT=""
 
+# ВАЖНО: Укажи здесь прямую (raw) ссылку на этот скрипт в твоем GitHub!
+SCRIPT_URL="https://raw.githubusercontent.com/BEDOLAGA-DEV/ТВОЙ_РЕПОЗИТОРИЙ/main/st_village.sh"
+
 # === УТИЛИТЫ ===
 log() { echo -e "${BLUE}[$(date +'%H:%M:%S')]${NC} $1"; }
 pause() { echo -ne "\n${YELLOW}Нажмите Enter для продолжения...${NC}"; read; }
@@ -30,8 +33,7 @@ install_project() {
     echo -e "${PURPLE}====================================================${NC}"
     echo -e "${YELLOW}Папки проекта не найдены. Начинаем первичное развертывание...${NC}\n"
 
-    # 1. Проверка зависимостей (Git, Docker)
-    log "Проверка системных зависимостей для Ubuntu 24.04..."
+    log "Проверка системных зависимостей для Ubuntu..."
     if ! command -v git &> /dev/null; then
         log "Установка Git..."
         apt-get update && apt-get install -y git
@@ -41,22 +43,16 @@ install_project() {
         curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
     fi
 
-    # 2. Клонирование репозиториев
     log "Скачивание Бота из GitHub..."
     git clone "$BOT_REPO" "$BASE_DIR/bot"
     
     log "Скачивание Кабинета из GitHub..."
     git clone "$CABINET_REPO" "$BASE_DIR/cabinet"
 
-    # 3. Настройка Caddy
     log "Настройка веб-сервера Caddy..."
     mkdir -p "$BASE_DIR/caddy"
     
-    # Базовый Caddyfile
     cat <<EOF > "$BASE_DIR/caddy/Caddyfile"
-# Базовый конфиг Caddy для ST VILLAGE
-# Отредактируйте домены перед запуском!
-
 bot.yourdomain.com {
     reverse_proxy bot:8000
 }
@@ -73,7 +69,6 @@ cabinet.yourdomain.com {
 }
 EOF
 
-    # Docker Compose для Caddy
     cat <<EOF > "$BASE_DIR/caddy/docker-compose.yml"
 services:
   caddy:
@@ -99,7 +94,6 @@ volumes:
   caddy_config:
 EOF
 
-    # 4. Создание .env шаблонов
     log "Создание базовых конфигураций..."
     [ ! -f "$BASE_DIR/bot/.env" ] && cp "$BASE_DIR/bot/.env.example" "$BASE_DIR/bot/.env" 2>/dev/null || touch "$BASE_DIR/bot/.env"
     [ ! -f "$BASE_DIR/cabinet/.env" ] && cp "$BASE_DIR/cabinet/.env.example" "$BASE_DIR/cabinet/.env" 2>/dev/null || touch "$BASE_DIR/cabinet/.env"
@@ -113,7 +107,6 @@ EOF
 check_versions() {
     echo -e "${CYAN}[🔄] Проверка обновлений на GitHub...${NC}"
     
-    # Бот
     if [ -d "$BASE_DIR/bot/.git" ]; then
         cd "$BASE_DIR/bot" || return
         git fetch origin main -q 2>/dev/null
@@ -128,7 +121,6 @@ check_versions() {
         BOT_VER_TXT="${RED}Не установлен${NC}"
     fi
 
-    # Кабинет
     if [ -d "$BASE_DIR/cabinet/.git" ]; then
         cd "$BASE_DIR/cabinet" || return
         git fetch origin main -q 2>/dev/null
@@ -144,7 +136,7 @@ check_versions() {
     fi
 }
 
-# === АВТО-ОБНОВЛЕНИЕ ===
+# === АВТО-ОБНОВЛЕНИЕ КОМПОНЕНТОВ ===
 update_component() {
     local component=$1
     local name_ru=$2
@@ -175,6 +167,31 @@ update_component() {
 
     echo -e "\n${GREEN}[✅] ${name_ru} успешно обновлен! (Заняло: ${elapsed} сек.)${NC}"
     pause
+}
+
+# === САМООБНОВЛЕНИЕ СКРИПТА ===
+update_self() {
+    echo -e "\n${CYAN}========================================${NC}"
+    echo -e "${BOLD}[🔄] ОБНОВЛЕНИЕ ПАНЕЛИ УПРАВЛЕНИЯ${NC}"
+    echo -e "${CYAN}========================================${NC}"
+    
+    log "${YELLOW}Скачивание новой версии скрипта с GitHub...${NC}"
+    
+    # Скачиваем во временный файл
+    wget -qO "$0.tmp" "$SCRIPT_URL"
+    
+    # Проверяем, что файл скачался и это действительно bash скрипт
+    if [ $? -eq 0 ] && grep -q "#!/bin/bash" "$0.tmp"; then
+        mv "$0.tmp" "$0"
+        chmod +x "$0"
+        echo -e "${GREEN}[✅] Скрипт успешно обновлен! Перезапуск интерфейса...${NC}"
+        sleep 2
+        exec "$0" # Магическая команда: заменяет текущий процесс новым скачанным скриптом
+    else
+        echo -e "${RED}[❌] Ошибка скачивания. Проверьте ссылку SCRIPT_URL в коде скрипта.${NC}"
+        rm -f "$0.tmp" 2>/dev/null
+        pause
+    fi
 }
 
 # === МЕНЮ НАСТРОЕК (РЕДАКТОР) ===
@@ -212,7 +229,7 @@ check_versions
 while true; do
     clear
     echo -e "${PURPLE}====================================================${NC}"
-    echo -e "${CYAN}${BOLD} 🚀 ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v9.0 🚀 ${NC}"
+    echo -e "${CYAN}${BOLD} 🚀 ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v10.0 🚀 ${NC}"
     echo -e "${PURPLE}====================================================${NC}"
     echo -e "📂 Ядро проекта:   ${GREEN}$BASE_DIR${NC}"
     echo -e "${PURPLE}----------------------------------------------------${NC}"
@@ -227,7 +244,8 @@ while true; do
     echo -e "${RED}4.${NC} 🛑 Остановить проект"
     echo -e "${CYAN}5.${NC} ⚙️ Редактор конфигураций (.env / Caddyfile)"
     echo -e "${YELLOW}6.${NC} 📋 Просмотр логов"
-    echo -e "${PURPLE}7.${NC} 🔄 Проверить наличие обновлений (Refresh)"
+    echo -e "${PURPLE}7.${NC} 🔄 Обновить статус версий компонентов"
+    echo -e "${BOLD}8.${NC} 📦 Обновить саму панель управления (Скрипт)"
     echo -e "${RED}0.${NC} ❌ Выход"
     
     echo -ne "\n${YELLOW}Выберите команду ➤ ${NC}"
@@ -257,6 +275,7 @@ while true; do
             esac
             ;;
         7) check_versions ;;
+        8) update_self ;;
         0) clear; echo -e "${GREEN}Успешной работы ST VILLAGE!${NC}\n"; exit 0 ;;
         *) echo -e "${RED}Неизвестная команда.${NC}"; sleep 1 ;;
     esac
