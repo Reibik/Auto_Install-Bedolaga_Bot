@@ -19,7 +19,7 @@ BOT_VER_TXT=""
 CAB_VER_TXT=""
 
 # Твоя ссылка на автообновление
-SCRIPT_URL="https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/st_village.sh"
+SCRIPT_URL="https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/refs/heads/main/st_village.sh"
 
 # === УТИЛИТЫ ===
 log() { echo -e "${BLUE}[$(date +'%H:%M:%S')]${NC} $1"; }
@@ -306,3 +306,4 @@ while true; do
         *) echo -e "${RED}Неизвестная команда.${NC}"; sleep 1 ;;
     esac
 done
+
