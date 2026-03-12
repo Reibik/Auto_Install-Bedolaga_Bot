@@ -18,8 +18,8 @@ CABINET_REPO="https://github.com/BEDOLAGA-DEV/bedolaga-cabinet.git"
 BOT_VER_TXT=""
 CAB_VER_TXT=""
 
-# ВАЖНО: Укажи здесь прямую (raw) ссылку на этот скрипт в твоем GitHub!
-SCRIPT_URL="https://github.com/Reibik/Auto_Install-Bedolaga_Bot/blob/main/st_village.sh"
+# Ссылка на автообновление панели
+SCRIPT_URL="https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/st_village.sh"
 
 # === УТИЛИТЫ ===
 log() { echo -e "${BLUE}[$(date +'%H:%M:%S')]${NC} $1"; }
@@ -177,16 +177,17 @@ update_self() {
     
     log "${YELLOW}Скачивание новой версии скрипта с GitHub...${NC}"
     
-    # Скачиваем во временный файл
     wget -qO "$0.tmp" "$SCRIPT_URL"
     
-    # Проверяем, что файл скачался и это действительно bash скрипт
     if [ $? -eq 0 ] && grep -q "#!/bin/bash" "$0.tmp"; then
+        # Лечим файл от возможных Windows CRLF переносов строк
+        sed -i 's/\r$//' "$0.tmp"
+        
         mv "$0.tmp" "$0"
         chmod +x "$0"
         echo -e "${GREEN}[✅] Скрипт успешно обновлен! Перезапуск интерфейса...${NC}"
         sleep 2
-        exec "$0" # Магическая команда: заменяет текущий процесс новым скачанным скриптом
+        exec "$0"
     else
         echo -e "${RED}[❌] Ошибка скачивания. Проверьте ссылку SCRIPT_URL в коде скрипта.${NC}"
         rm -f "$0.tmp" 2>/dev/null
@@ -229,7 +230,7 @@ check_versions
 while true; do
     clear
     echo -e "${PURPLE}====================================================${NC}"
-    echo -e "${CYAN}${BOLD} 🚀 ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v10.0 🚀 ${NC}"
+    echo -e "${CYAN}${BOLD} 🚀 ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v11.0 🚀 ${NC}"
     echo -e "${PURPLE}====================================================${NC}"
     echo -e "📂 Ядро проекта:   ${GREEN}$BASE_DIR${NC}"
     echo -e "${PURPLE}----------------------------------------------------${NC}"
@@ -244,7 +245,7 @@ while true; do
     echo -e "${RED}4.${NC} 🛑 Остановить проект"
     echo -e "${CYAN}5.${NC} ⚙️ Редактор конфигураций (.env / Caddyfile)"
     echo -e "${YELLOW}6.${NC} 📋 Просмотр логов"
-    echo -e "${PURPLE}7.${NC} 🔄 Обновить статус версий компонентов"
+    echo -e "${PURPLE}7.${NC} 🔄 Проверить наличие обновлений (Refresh)"
     echo -e "${BOLD}8.${NC} 📦 Обновить саму панель управления (Скрипт)"
     echo -e "${RED}0.${NC} ❌ Выход"
     
@@ -280,4 +281,3 @@ while true; do
         *) echo -e "${RED}Неизвестная команда.${NC}"; sleep 1 ;;
     esac
 done
-
