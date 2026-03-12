@@ -30,20 +30,20 @@
 
 ### 1. Скачайте скрипт
 ```bash
-curl -O https://example.com/install-bedolaga.sh
-chmod +x install-bedolaga.sh
+curl -O https://github.com/Reibik/Auto_Install-Bedolaga_Bot/blob/main/st_village.sh
+chmod +x st_village.sh
 ```
 
 ### 2. Запустите скрипт
 
 #### Интерактивный режим
 ```bash
-./install-bedolaga.sh
+./st_village.sh
 ```
 
 #### Автоматический режим
 ```bash
-./install-bedolaga.sh --auto
+./st_village.sh --auto
 ```
 
 ---
