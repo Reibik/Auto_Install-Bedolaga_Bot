@@ -18,8 +18,22 @@ CABINET_REPO="https://github.com/BEDOLAGA-DEV/bedolaga-cabinet.git"
 BOT_VER_TXT=""
 CAB_VER_TXT=""
 
-# Твоя ссылка на автообновление
-SCRIPT_URL="https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/refs/heads/main/st_village.sh"
+# Ссылка на автообновление панели
+SCRIPT_URL="https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/st_village.sh"
+
+# === СКРЫТЫЙ РЕЖИМ: АВТО-БЭКАП ДЛЯ CRON ===
+if [ "$1" == "cron_backup" ]; then
+    BACKUP_DIR="$BASE_DIR/backups"
+    mkdir -p "$BACKUP_DIR"
+    DATE=$(date +"%Y-%m-%d_%H-%M-%S")
+    BACKUP_FILE="$BACKUP_DIR/backup_auto_${DATE}.tar.gz"
+    
+    tar --exclude='./bot/.venv' --exclude='./bot/__pycache__' --exclude='./cabinet/node_modules' --exclude='./cabinet/.svelte-kit' --exclude='./backups' --exclude='./.git' -czf "$BACKUP_FILE" -C "$BASE_DIR" .
+    
+    # Ротация: оставляем только 7 последних бэкапов
+    ls -tp "$BACKUP_DIR"/backup_auto_*.tar.gz 2>/dev/null | grep -v '/$' | tail -n +8 | xargs -I {} rm -- {}
+    exit 0
+fi
 
 # === УТИЛИТЫ ===
 log() { echo -e "${BLUE}[$(date +'%H:%M:%S')]${NC} $1"; }
@@ -156,7 +170,7 @@ get_system_info() {
     fi
 }
 
-# === АВТО-ОБНОВЛЕНИЕ КОМПОНЕНТОВ ===
+# === АВТО-ОБНОВЛЕНИЕ КОМПОНЕНТОВ (С ЗАЩИТОЙ) ===
 update_component() {
     local component=$1
     local name_ru=$2
@@ -168,6 +182,9 @@ update_component() {
     cd "$BASE_DIR/$component" || return
     local old_commit=$(git rev-parse --short HEAD 2>/dev/null)
     log "${YELLOW}Текущая версия: ${old_commit}${NC}"
+
+    # Сохраняем текущий коммит для возможного отката
+    echo "$old_commit" > "$BASE_DIR/$component/.last_commit"
 
     git reset --hard HEAD >/dev/null 2>&1
     git clean -fd >/dev/null 2>&1
@@ -185,7 +202,7 @@ update_component() {
     docker compose up -d --build "$component"
     local elapsed=$(($(date +%s) - start_time))
 
-    echo -e "\n${GREEN}[✅] ${name_ru} успешно обновлен! (Заняло: ${elapsed} сек.)${NC}"
+    echo -e "\n${GREEN}[✅] ${name_ru} успешно обновлен до ${new_commit}! (Заняло: ${elapsed} сек.)${NC}"
     pause
 }
 
@@ -212,7 +229,7 @@ update_self() {
     fi
 }
 
-# === МЕНЮ НАСТРОЕК (РЕДАКТОР) ===
+# === МЕНЮ: НАСТРОЙКИ (РЕДАКТОР) ===
 config_menu() {
     while true; do
         clear
@@ -237,6 +254,92 @@ config_menu() {
     done
 }
 
+# === МЕНЮ: СИСТЕМА И БЕЗОПАСНОСТЬ ===
+system_security_menu() {
+    while true; do
+        clear
+        echo -e "${CYAN}========================================${NC}"
+        echo -e "${BOLD}🛡 СИСТЕМА И БЕЗОПАСНОСТЬ${NC}"
+        echo -e "${CYAN}========================================${NC}"
+        echo -e "${BLUE}[Резервное копирование]${NC}"
+        echo -e "${GREEN}1.${NC} 💾 Создать ручной бэкап сейчас"
+        echo -e "${GREEN}2.${NC} ⏱ Включить ежедневный авто-бэкап (Cron: 03:00)"
+        echo -e "${RED}3.${NC} 🛑 Отключить авто-бэкапы"
+        echo -e "${BLUE}[Экстренный откат обновлений]${NC}"
+        echo -e "${YELLOW}4.${NC} ⏪ Откатить Бота на предыдущую версию"
+        echo -e "${YELLOW}5.${NC} ⏪ Откатить Кабинет на предыдущую версию"
+        echo -e "${BLUE}[Обслуживание]${NC}"
+        echo -e "${CYAN}6.${NC} 🧹 Очистить систему Docker от мусора"
+        echo -e "${RED}0.${NC} ⬅️ Назад"
+        echo -ne "\n${YELLOW}Выберите действие ➤ ${NC}"
+        read sys_choice
+
+        case $sys_choice in
+            1)
+                BACKUP_DIR="$BASE_DIR/backups"
+                mkdir -p "$BACKUP_DIR"
+                DATE=$(date +"%Y-%m-%d_%H-%M-%S")
+                BACKUP_FILE="$BACKUP_DIR/backup_manual_${DATE}.tar.gz"
+                log "${YELLOW}Архивируем проект...${NC}"
+                tar --exclude='./bot/.venv' --exclude='./bot/__pycache__' --exclude='./cabinet/node_modules' --exclude='./cabinet/.svelte-kit' --exclude='./backups' --exclude='./.git' -czf "$BACKUP_FILE" -C "$BASE_DIR" .
+                if [ $? -eq 0 ]; then
+                    local size=$(du -sh "$BACKUP_FILE" | awk '{print $1}')
+                    echo -e "${GREEN}[✅] Бэкап создан: $BACKUP_FILE ($size)${NC}"
+                else
+                    echo -e "${RED}[❌] Ошибка при создании бэкапа!${NC}"
+                fi
+                pause
+                ;;
+            2)
+                # Добавляем задачу в Cron
+                (crontab -l 2>/dev/null | grep -v "$0 cron_backup"; echo "0 3 * * * $0 cron_backup") | crontab -
+                echo -e "${GREEN}[✅] Авто-бэкап успешно настроен!${NC}"
+                echo -e "Система будет архивировать проект каждый день в 03:00 ночи."
+                echo -e "Архивы сохраняются в $BASE_DIR/backups/"
+                pause
+                ;;
+            3)
+                # Удаляем задачу из Cron
+                crontab -l 2>/dev/null | grep -v "$0 cron_backup" | crontab -
+                echo -e "${RED}[🛑] Авто-бэкапы отключены.${NC}"
+                pause
+                ;;
+            4)
+                if [ -f "$BASE_DIR/bot/.last_commit" ]; then
+                    local prev_commit=$(cat "$BASE_DIR/bot/.last_commit")
+                    log "${YELLOW}Откат Бота на версию: ${prev_commit}${NC}"
+                    cd "$BASE_DIR/bot" && git reset --hard "$prev_commit" >/dev/null 2>&1
+                    cd "$BASE_DIR" && docker compose up -d --build bot
+                    echo -e "${GREEN}[✅] Бот успешно откачен!${NC}"
+                else
+                    echo -e "${RED}[❌] Нет сохраненных данных для отката.${NC}"
+                fi
+                pause
+                ;;
+            5)
+                if [ -f "$BASE_DIR/cabinet/.last_commit" ]; then
+                    local prev_commit=$(cat "$BASE_DIR/cabinet/.last_commit")
+                    log "${YELLOW}Откат Кабинета на версию: ${prev_commit}${NC}"
+                    cd "$BASE_DIR/cabinet" && git reset --hard "$prev_commit" >/dev/null 2>&1
+                    cd "$BASE_DIR" && docker compose up -d --build cabinet
+                    echo -e "${GREEN}[✅] Кабинет успешно откачен!${NC}"
+                else
+                    echo -e "${RED}[❌] Нет сохраненных данных для отката.${NC}"
+                fi
+                pause
+                ;;
+            6)
+                log "${YELLOW}Удаление неиспользуемых образов и кэша сборки...${NC}"
+                docker image prune -a -f
+                docker builder prune -f
+                echo -e "${GREEN}[✅] Мусор успешно удален! Диск очищен.${NC}"
+                pause
+                ;;
+            0) return ;;
+        esac
+    done
+}
+
 # === СТАРТ СКРИПТА (ТОЧКА ВХОДА) ===
 if [ ! -d "$BASE_DIR/bot" ] || [ ! -d "$BASE_DIR/cabinet" ]; then
     install_project
@@ -245,11 +348,11 @@ fi
 check_versions
 
 while true; do
-    get_system_info # Обновляем системную информацию перед каждым показом меню
+    get_system_info
     
     clear
     echo -e "${PURPLE}====================================================${NC}"
-    echo -e "${CYAN}${BOLD} 🚀 ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v12.0 🚀 ${NC}"
+    echo -e "${CYAN}${BOLD} 🚀 ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v13.0 🚀 ${NC}"
     echo -e "${PURPLE}====================================================${NC}"
     echo -e "📂 Ядро проекта:   ${GREEN}$BASE_DIR${NC}"
     echo -e "${PURPLE}----------------------------------------------------${NC}"
@@ -270,8 +373,9 @@ while true; do
     echo -e "${RED}4.${NC} 🛑 Остановить проект"
     echo -e "${CYAN}5.${NC} ⚙️ Редактор конфигураций (.env / Caddyfile)"
     echo -e "${YELLOW}6.${NC} 📋 Просмотр логов"
-    echo -e "${PURPLE}7.${NC} 🔄 Обновить статусы (Сервер + GitHub)"
-    echo -e "${BOLD}8.${NC} 📦 Обновить панель управления (Скрипт)"
+    echo -e "${PURPLE}7.${NC} 🛡 Система и Безопасность (Бэкап / Откат / Очистка)"
+    echo -e "${YELLOW}8.${NC} 🔄 Обновить статусы (Сервер + GitHub)"
+    echo -e "${BOLD}9.${NC} 📦 Обновить панель управления (Скрипт)"
     echo -e "${RED}0.${NC} ❌ Выход"
     
     echo -ne "\n${YELLOW}Выберите команду ➤ ${NC}"
@@ -300,10 +404,10 @@ while true; do
                 3) cd "$BASE_DIR/caddy" && docker compose logs -f --tail=50 ;;
             esac
             ;;
-        7) check_versions ;;
-        8) update_self ;;
+        7) system_security_menu ;;
+        8) check_versions ;;
+        9) update_self ;;
         0) clear; echo -e "${GREEN}Успешной работы ST VILLAGE!${NC}\n"; exit 0 ;;
         *) echo -e "${RED}Неизвестная команда.${NC}"; sleep 1 ;;
     esac
 done
-
