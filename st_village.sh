@@ -19,7 +19,7 @@ BOT_VER_TXT=""
 CAB_VER_TXT=""
 
 # ВАЖНО: Укажи здесь прямую (raw) ссылку на этот скрипт в твоем GitHub!
-SCRIPT_URL="https://raw.githubusercontent.com/BEDOLAGA-DEV/ТВОЙ_РЕПОЗИТОРИЙ/main/st_village.sh"
+SCRIPT_URL="https://github.com/Reibik/Auto_Install-Bedolaga_Bot/blob/main/st_village.sh"
 
 # === УТИЛИТЫ ===
 log() { echo -e "${BLUE}[$(date +'%H:%M:%S')]${NC} $1"; }
@@ -280,3 +280,4 @@ while true; do
         *) echo -e "${RED}Неизвестная команда.${NC}"; sleep 1 ;;
     esac
 done
+
