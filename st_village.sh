@@ -18,7 +18,7 @@ CABINET_REPO="https://github.com/BEDOLAGA-DEV/bedolaga-cabinet.git"
 BOT_VER_TXT=""
 CAB_VER_TXT=""
 
-# Ссылка на автообновление панели
+# Твоя ссылка на автообновление
 SCRIPT_URL="https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/st_village.sh"
 
 # === УТИЛИТЫ ===
@@ -35,11 +35,9 @@ install_project() {
 
     log "Проверка системных зависимостей для Ubuntu..."
     if ! command -v git &> /dev/null; then
-        log "Установка Git..."
         apt-get update && apt-get install -y git
     fi
     if ! command -v docker &> /dev/null; then
-        log "Установка Docker..."
         curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
     fi
 
@@ -136,6 +134,28 @@ check_versions() {
     fi
 }
 
+# === СБОР СИСТЕМНОЙ ИНФОРМАЦИИ ===
+get_system_info() {
+    OS_NAME=$(grep PRETTY_NAME /etc/os-release | cut -d '"' -f 2)
+    UPTIME=$(uptime -p | sed 's/up //')
+    RAM=$(free -m | awk 'NR==2{printf "%s / %s MB (%.1f%%)", $3,$2,$3*100/$2 }')
+    DISK=$(df -h / | awk '$NF=="/"{printf "%s / %s (%s)", $3,$2,$5}')
+    
+    if command -v docker &> /dev/null; then
+        DOCKER_RUNNING=$(docker ps -q 2>/dev/null | wc -l)
+        DOCKER_TOTAL=$(docker ps -a -q 2>/dev/null | wc -l)
+        if [ "$DOCKER_RUNNING" -eq "$DOCKER_TOTAL" ] && [ "$DOCKER_TOTAL" -ne 0 ]; then
+            DOCKER_STAT="${GREEN}Запущено $DOCKER_RUNNING из $DOCKER_TOTAL${NC}"
+        elif [ "$DOCKER_TOTAL" -eq 0 ]; then
+            DOCKER_STAT="${YELLOW}Контейнеры не созданы${NC}"
+        else
+            DOCKER_STAT="${RED}Запущено $DOCKER_RUNNING из $DOCKER_TOTAL (Есть ошибки!)${NC}"
+        fi
+    else
+        DOCKER_STAT="${RED}Docker не установлен${NC}"
+    fi
+}
+
 # === АВТО-ОБНОВЛЕНИЕ КОМПОНЕНТОВ ===
 update_component() {
     local component=$1
@@ -176,13 +196,10 @@ update_self() {
     echo -e "${CYAN}========================================${NC}"
     
     log "${YELLOW}Скачивание новой версии скрипта с GitHub...${NC}"
-    
     wget -qO "$0.tmp" "$SCRIPT_URL"
     
     if [ $? -eq 0 ] && grep -q "#!/bin/bash" "$0.tmp"; then
-        # Лечим файл от возможных Windows CRLF переносов строк
         sed -i 's/\r$//' "$0.tmp"
-        
         mv "$0.tmp" "$0"
         chmod +x "$0"
         echo -e "${GREEN}[✅] Скрипт успешно обновлен! Перезапуск интерфейса...${NC}"
@@ -228,11 +245,19 @@ fi
 check_versions
 
 while true; do
+    get_system_info # Обновляем системную информацию перед каждым показом меню
+    
     clear
     echo -e "${PURPLE}====================================================${NC}"
-    echo -e "${CYAN}${BOLD} 🚀 ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v11.0 🚀 ${NC}"
+    echo -e "${CYAN}${BOLD} 🚀 ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v12.0 🚀 ${NC}"
     echo -e "${PURPLE}====================================================${NC}"
     echo -e "📂 Ядро проекта:   ${GREEN}$BASE_DIR${NC}"
+    echo -e "${PURPLE}----------------------------------------------------${NC}"
+    echo -e "${BOLD}🖥 СТАТУС СЕРВЕРА (${OS_NAME}):${NC}"
+    echo -e "⏱ Uptime (Время работы): ${CYAN}${UPTIME}${NC}"
+    echo -e "💾 RAM (Память):         ${CYAN}${RAM}${NC}"
+    echo -e "💽 SSD (Накопитель):     ${CYAN}${DISK}${NC}"
+    echo -e "🐳 Docker контейнеры:    ${DOCKER_STAT}"
     echo -e "${PURPLE}----------------------------------------------------${NC}"
     echo -e "${BOLD}📊 ВЕРСИИ КОМПОНЕНТОВ:${NC}"
     echo -e "🤖 Бот:     $BOT_VER_TXT"
@@ -245,8 +270,8 @@ while true; do
     echo -e "${RED}4.${NC} 🛑 Остановить проект"
     echo -e "${CYAN}5.${NC} ⚙️ Редактор конфигураций (.env / Caddyfile)"
     echo -e "${YELLOW}6.${NC} 📋 Просмотр логов"
-    echo -e "${PURPLE}7.${NC} 🔄 Проверить наличие обновлений (Refresh)"
-    echo -e "${BOLD}8.${NC} 📦 Обновить саму панель управления (Скрипт)"
+    echo -e "${PURPLE}7.${NC} 🔄 Обновить статусы (Сервер + GitHub)"
+    echo -e "${BOLD}8.${NC} 📦 Обновить панель управления (Скрипт)"
     echo -e "${RED}0.${NC} ❌ Выход"
     
     echo -ne "\n${YELLOW}Выберите команду ➤ ${NC}"
