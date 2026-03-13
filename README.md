@@ -110,11 +110,7 @@ source ~/.bashrc
 * **v1.0 - v2.0**
   * Базовый релиз системы чистого обновления и пересборки Docker-контейнеров без конфликтов слияния кода.
 ---
-
 *Developed for ST VILLAGE ecosystem | Powered by Bedolaga Repositories*
 
-```
-
 ## 📜 Лицензия
-
 Этот проект распространяется под лицензией **MIT**.
