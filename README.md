@@ -1,4 +1,4 @@
-<img width="484" height="562" alt="image" src="https://github.com/user-attachments/assets/59c216fc-0caa-4091-a7fe-7e4043947c70" />
+<img width="960" height="1115" alt="image" src="https://github.com/user-attachments/assets/9297d01e-8762-4856-863a-72ddadfaa277" />
 
 # 🚀 Скрипт авто-установки Bedolaga Bot и Cabinet
 
@@ -60,7 +60,8 @@ source ~/.bashrc
 При самом первом запуске на чистом сервере скрипт не найдет файлов проекта и запустит **Мастер установки**. Он скачает все нужные компоненты в директорию `/root`.
 
 **После установки вы увидите Главное Меню:**
-*(Здесь рекомендую добавить красивый скриншот консоли с запущенным скриптом)*
+
+*<img width="484" height="562" alt="image" src="https://github.com/user-attachments/assets/09837048-c7f4-46bd-a1d8-5b104866dcce" />*
 
 ### 🗂 Структура меню:
 
