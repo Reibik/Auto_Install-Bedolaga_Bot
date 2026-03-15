@@ -112,5 +112,11 @@ source ~/.bashrc
 ---
 *Developed for ST VILLAGE ecosystem | Powered by Bedolaga Repositories*
 
+## 🤝 Поддержка
+Подкинуть на хлебушек:
+* TON: UQBoEJvftr-Lz4xZoXSDRlJQbaRC_nZoMhvbi9ufeiMNLTOb
+* USDT TRC20: TRu92kG4LZ7nmubW3o31x19WagejmNt9PC
+* BTC: bc1qy82xy9sqp2kq4rvqjqrvfdl9k0s7hvy7pk3rnt
+
 ## 📜 Лицензия
 Этот проект распространяется под лицензией **MIT**.
