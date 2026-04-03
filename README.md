@@ -13,8 +13,6 @@
 
 ## ⚡ Быстрый старт
 
-*<img width="484" height="562" alt="image" src="https://github.com/user-attachments/assets/09837048-c7f4-46bd-a1d8-5b104866dcce" />*
-
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/st_village.sh)
 ```
@@ -132,7 +130,7 @@ cabinet.example.com {
 После заполнения конфигов выберите **пункт 3** в главном меню панели.
 
 ## 🖥 Панель управления
-
+*<img width="484" height="562" alt="image" src="https://github.com/user-attachments/assets/09837048-c7f4-46bd-a1d8-5b104866dcce" />*
 ```
 🚀 ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v15.0
 
