@@ -17,7 +17,7 @@ BLUE='\033[0;34m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-PANEL_VERSION="14.0"
+PANEL_VERSION="14.1"
 
 BASE_DIR="/root"
 BOT_DIR="$BASE_DIR/bot"
@@ -121,6 +121,20 @@ ensure_line_endings() {
 
 ensure_dirs() {
     mkdir -p "$BASE_DIR" "$BOT_DIR" "$CABINET_DIR" "$CADDY_DIR" "$BACKUP_DIR"
+}
+
+init_interactive_stdin() {
+    if [[ -t 0 ]]; then
+        return 0
+    fi
+
+    if [[ -r /dev/tty ]]; then
+        exec </dev/tty
+        return 0
+    fi
+
+    err "Интерактивный ввод недоступен. Запусти скрипт из терминала или через: bash <(curl -sL URL)"
+    exit 1
 }
 
 ensure_dependencies() {
@@ -694,6 +708,10 @@ main_menu() {
 require_root
 ensure_line_endings "$0"
 ensure_dirs
+
+if [[ "${1:-}" != "cron_backup" ]]; then
+    init_interactive_stdin
+fi
 
 if [[ ! -d "$BOT_DIR/.git" || ! -d "$CABINET_DIR/.git" ]]; then
     install_project
