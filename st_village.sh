@@ -153,7 +153,11 @@ dc_bot() {
 }
 
 dc_cabinet() {
-    compose_cmd -f "$CABINET_COMPOSE_FILE" -f "$CABINET_OVERRIDE_FILE" "$@"
+    if [[ -f "$CABINET_OVERRIDE_FILE" ]]; then
+        compose_cmd -f "$CABINET_COMPOSE_FILE" -f "$CABINET_OVERRIDE_FILE" "$@"
+    else
+        compose_cmd -f "$CABINET_COMPOSE_FILE" "$@"
+    fi
 }
 
 dc_caddy() {
@@ -300,9 +304,18 @@ show_post_install_steps() {
     echo
     echo -e "${YELLOW}Что нужно сделать дальше:${NC}"
     echo -e "  1) Заполнить ${CYAN}${BOT_DIR}/.env${NC}"
+    echo -e "     ${YELLOW}Обязательно:${NC} ${GREEN}BOT_TOKEN${NC} — токен бота от @BotFather"
+    echo -e "     ${YELLOW}Обязательно:${NC} ${GREEN}ADMIN_IDS${NC} — ваш Telegram ID"
+    echo -e "     ${YELLOW}Обязательно:${NC} ${GREEN}WEB_API_ENABLED=true${NC} — включить веб-сервер"
+    echo -e "     ${YELLOW}Обязательно:${NC} ${GREEN}CABINET_ENABLED=true${NC} — включить Cabinet API"
+    echo -e "     ${YELLOW}Обязательно:${NC} ${GREEN}CABINET_ALLOWED_ORIGINS${NC} — домен кабинета (https://cabinet.ваш-домен.com)"
+    echo -e "     ${YELLOW}Обязательно:${NC} ${GREEN}REMNAWAVE_API_URL${NC} — URL панели Remnawave"
+    echo -e "     ${YELLOW}Обязательно:${NC} ${GREEN}REMNAWAVE_API_KEY${NC} — API ключ панели Remnawave"
     echo -e "  2) Заполнить ${CYAN}${CABINET_DIR}/.env${NC}"
+    echo -e "     ${YELLOW}Обязательно:${NC} ${GREEN}VITE_TELEGRAM_BOT_USERNAME${NC} — username бота (без @)"
     echo -e "  3) Заменить домены в ${CYAN}${CADDYFILE}${NC}"
-    echo -e "  4) Затем выбрать запуск проекта в главном меню"
+    echo -e "     Заменить ${RED}bot.example.com${NC} и ${RED}cabinet.example.com${NC} на ваши реальные домены"
+    echo -e "  4) Затем выбрать ${BOLD}запуск проекта${NC} в главном меню"
     echo
 }
 
@@ -346,9 +359,12 @@ ensure_bot_network() {
         return 0
     fi
 
-    warn "Сеть remnawave-network пока не найдена."
-    warn "Она обычно создается при запуске Bedolaga Bot."
-    return 1
+    log "Сеть remnawave-network не найдена. Создаю..."
+    docker network create remnawave-network >/dev/null 2>&1 || {
+        err "Не удалось создать сеть remnawave-network."
+        return 1
+    }
+    ok "Сеть remnawave-network создана."
 }
 
 check_versions() {
@@ -416,6 +432,29 @@ start_project() {
     validate_project_files || { pause; return 1; }
     ensure_dependencies
     normalize_project_files
+
+    if grep -qE '^BOT_TOKEN=$' "${BOT_DIR}/.env" 2>/dev/null; then
+        warn "BOT_TOKEN не заполнен в ${BOT_DIR}/.env"
+        if ! confirm "Запустить всё равно?"; then
+            return 1
+        fi
+    fi
+
+    if grep -qE '^WEB_API_ENABLED=false' "${BOT_DIR}/.env" 2>/dev/null; then
+        warn "WEB_API_ENABLED=false — веб-сервер отключен, кабинет не будет работать!"
+        warn "Установите WEB_API_ENABLED=true в ${BOT_DIR}/.env"
+        if ! confirm "Запустить всё равно?"; then
+            return 1
+        fi
+    fi
+
+    if grep -qE '^CABINET_ENABLED=false' "${BOT_DIR}/.env" 2>/dev/null; then
+        warn "CABINET_ENABLED=false — Cabinet API отключен, кабинет не будет работать!"
+        warn "Установите CABINET_ENABLED=true в ${BOT_DIR}/.env"
+        if ! confirm "Запустить всё равно?"; then
+            return 1
+        fi
+    fi
 
     log "Запускаю Bedolaga Bot..."
     dc_bot up -d --build || { err "Не удалось запустить Bot."; pause; return 1; }
@@ -545,8 +584,8 @@ rotate_auto_backups() {
 }
 
 enable_auto_backup() {
-    (crontab -l 2>/dev/null | grep -Fv "${DEFAULT_INSTALL_PATH} cron_backup"; \
-     echo "0 3 * * * ${DEFAULT_INSTALL_PATH} cron_backup") | crontab -
+    { crontab -l 2>/dev/null | grep -Fv "${DEFAULT_INSTALL_PATH} cron_backup" || true; \
+      echo "0 3 * * * ${DEFAULT_INSTALL_PATH} cron_backup"; } | crontab -
 }
 
 disable_auto_backup() {
@@ -695,8 +734,10 @@ system_security_menu() {
             4) rollback_component "bot" "Бот" ;;
             5) rollback_component "cabinet" "Кабинет" ;;
             6)
-                docker system prune -af --volumes
-                ok "Очистка завершена."
+                if confirm "Это удалит ВСЕ неиспользуемые Docker-образы, контейнеры и тома. Продолжить?"; then
+                    docker system prune -af --volumes || true
+                    ok "Очистка завершена."
+                fi
                 pause
                 ;;
             0) return ;;
