@@ -1,116 +1,242 @@
+# 🚀 ST Village — Auto Install Bedolaga Bot
+
 <img width="960" height="1115" alt="image" src="https://github.com/user-attachments/assets/9297d01e-8762-4856-863a-72ddadfaa277" />
 
-# 🚀 Скрипт авто-установки Bedolaga Bot и Cabinet
+Интерактивный bash-скрипт для автоматической установки и управления **[Bedolaga Telegram Bot](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot)** + **[Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet)** + **Caddy** (reverse proxy с автоматическим SSL).
 
-Этот скрипт предназначен для автоматической установки и настройки двух приложений:
+## 📋 Что делает скрипт
 
-1. [Bedolaga Telegram Bot](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot)
-2. [Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet)
+- Устанавливает Docker и все системные зависимости
+- Клонирует репозитории бота и кабинета
+- Генерирует конфигурации Caddy и docker-compose override
+- Предоставляет интерактивную панель управления для всех операций
 
----
-# 🚀 ST VILLAGE - Bedolaga | Ultimate Dashboard & Auto-Deploy
-
-![Bash](https://img.shields.io/badge/Language-Bash-4EAA25?style=for-the-badge&logo=gnu-bash&logoColor=white)
-![Ubuntu](https://img.shields.io/badge/OS-Ubuntu_24.04_LTS-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)
-![Docker](https://img.shields.io/badge/Powered_by-Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-
-Единый Bash-комбайн для автоматического развертывания, мониторинга и управления экосистемой проекта **ST VILLAGE** (Telegram Бот + Web Кабинет + Caddy). Скрипт превращает терминал Linux в полноценную панель управления сервером.
-
----
-
-## ✨ Главные фишки (Features)
-
-* **🚀 Установка в 1 клик (Zero-to-Hero):** Скрипт сам установит Git, Docker, склонирует репозитории Бота и Кабинета, а также сгенерирует базовые конфиги `.env` и `Caddyfile`.
-* **📊 Умный Дашборд:** Мониторинг RAM, SSD, Uptime и статуса Docker-контейнеров в реальном времени.
-* **🔄 Центр обновлений с GitHub:** Автоматическая проверка новых версий (коммитов). Скрипт покажет, если доступен новый патч, и позволит обновить Бота или Кабинет одной кнопкой (с авто-пересборкой контейнеров).
-* **🛡️ Система и Безопасность:**
-  * **Авто-бэкапы (Cron):** Скрипт сам прописывает задачу в планировщик. Ежедневная архивация баз данных и конфигов в 03:00 с ротацией (хранятся 7 последних дней).
-  * **Экстренный откат (Rollback):** Новое обновление сломало проект? Верните предыдущую рабочую версию в один клик.
-  * **Очистка мусора:** Удаление старых Docker-образов и кэша для освобождения места на диске.
-* **⚙️ Встроенный редактор:** Быстрое редактирование настроек проекта прямо из панели.
-* **📦 Самообновление:** Скрипт умеет обновлять сам себя прямо из этого репозитория.
-
----
-
-## 📥 Установка и Запуск
-
-Скрипт предназначен для запуска от пользователя `root` (или с правами sudo).
-
-Выполните эту команду в терминале вашего сервера, чтобы скачать и запустить панель:
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/st_village.sh)
-
-```
-
-### 💡 Быстрый доступ (Алиас)
-
-Чтобы вызывать панель из любой папки сервера просто написав слово `stvillage`, выполните один раз:
-
-```bash
-echo "alias stvillage='/root/st_village.sh'" >> ~/.bashrc
-source ~/.bashrc
-
-```
-
----
-
-## 🎮 Как это работает?
-
-При самом первом запуске на чистом сервере скрипт не найдет файлов проекта и запустит **Мастер установки**. Он скачает все нужные компоненты в директорию `/root`.
-
-**После установки вы увидите Главное Меню:**
+## ⚡ Быстрый старт
 
 *<img width="484" height="562" alt="image" src="https://github.com/user-attachments/assets/09837048-c7f4-46bd-a1d8-5b104866dcce" />*
 
-### 🗂 Структура меню:
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/st_village.sh)
+```
 
-1. **Обновить Бота / Кабинет:** Скачивание свежего кода из ветки `main` и пересборка.
-2. **Запустить / Остановить проект:** Управление питанием всех контейнеров.
-3. **Редактор конфигураций:** Быстрый доступ к `.env` и `Caddyfile`.
-4. **Просмотр логов:** Живой вывод (Real-time) логов любого контейнера.
-5. **Система и Безопасность:** Создание бэкапов, настройка Cron, откаты версий и очистка диска.
+Или вручную:
 
----
+```bash
+curl -fsSL https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/st_village.sh -o /root/st_village.sh
+chmod +x /root/st_village.sh
+./st_village.sh
+```
 
-## 🏗 Архитектура проекта
+> **Требуется root.** Скрипт проверяет права при запуске.
 
-После установки скрипт создает следующую структуру директорий:
+## 📌 Требования
 
-```text
-/root/
-├── bot/            # Telegram-бот (remnawave-bedolaga-telegram-bot)
-├── cabinet/        # Web-интерфейс (bedolaga-cabinet)
-├── caddy/          # Конфиги и docker-compose для веб-сервера Caddy
-├── backups/        # Здесь будут храниться .tar.gz архивы проекта
-├── st_village.sh   # Сам скрипт управления
+| Компонент | Минимум |
+|-----------|---------|
+| ОС | Ubuntu 20.04+ / Debian 11+ |
+| RAM | 1 GB |
+| Диск | 5 GB свободно |
+| Права | root |
+| Сеть | Открытые порты 80 и 443 |
+| Домены | 2 домена (для бота и кабинета), направленные A-записью на IP сервера |
+
+Docker и Docker Compose устанавливаются автоматически, если не обнаружены.
+
+## 🏗 Архитектура
 
 ```
-## 📝 Changelog (История изменений)
+Браузер → Caddy (80/443, auto-SSL)
+              ├─ bot.example.com     → remnawave_bot:8080      (Backend API)
+              └─ cabinet.example.com
+                    ├─ /api/*        → remnawave_bot:8080      (Cabinet API, strip /api)
+                    └─ /*            → cabinet_frontend:80      (React SPA)
+```
 
-* **v13.0 (Ultimate Edition) - Текущая версия**
-  * ⏱ Добавлена настройка автоматических ночных бэкапов через `cron` (с ротацией до 7 дней).
-  * ⏪ Внедрена система экстренного отката (Rollback) — возможность вернуть предыдущую рабочую версию после неудачного обновления.
-  * 🛡 Создано отдельное меню «Система и Безопасность».
-* **v12.0 (Ultimate Dashboard)**
-  * 🖥 Интегрирован мониторинг ресурсов сервера (Uptime, RAM, SSD) в реальном времени.
-  * 🐳 Добавлен умный анализатор здоровья Docker-контейнеров.
-* **v10.0 - v11.0 (Self-Update System)**
-  * 📦 Реализована функция безопасного самообновления панели напрямую с GitHub с автоматической очисткой Windows-переносов каретки (CRLF).
-* **v9.0 (Master Installer)**
-  * 🚀 Добавлен режим "Auto-Deploy" для установки проекта на чистый сервер с нуля.
-  * 🌐 Внедрена автоматическая генерация конфигураций для веб-сервера Caddy.
-* **v8.0 (Enterprise)**
-  * ⚙️ Встроен быстрый консольный редактор конфигураций (`.env` и `Caddyfile`).
-  * 🧹 Добавлена функция глобальной очистки Docker от мусора и "висячих" образов.
-* **v6.0 (Smart Dashboard)**
-  * 🔄 Интегрирован фоновый `git fetch` для проверки свежих обновлений от разработчиков до начала скачивания.
-* **v3.0 (Backup System)**
-  * 💾 Появление системы "умного" резервного копирования (без захвата тяжелых папок кэша, `.venv` и `node_modules`).
-* **v1.0 - v2.0**
-  * Базовый релиз системы чистого обновления и пересборки Docker-контейнеров без конфликтов слияния кода.
----
-*Developed for ST VILLAGE ecosystem | Powered by Bedolaga Repositories*
+Все контейнеры объединены в Docker-сеть `remnawave-network`.
+
+### Структура файлов на сервере
+
+```
+/root/
+├── bot/                        # Bedolaga Bot (клон репозитория)
+│   ├── docker-compose.local.yml
+│   └── .env
+├── cabinet/                    # Bedolaga Cabinet (клон репозитория)
+│   ├── docker-compose.yml
+│   ├── docker-compose.override.yml  # Автогенерируется скриптом
+│   └── .env
+├── caddy/                      # Caddy reverse proxy
+│   ├── docker-compose.yml          # Автогенерируется скриптом
+│   └── Caddyfile                   # Автогенерируется скриптом
+├── backups/                    # Резервные копии
+└── st_village.sh               # Этот скрипт
+```
+
+## 🔧 Настройка после установки
+
+После первого запуска скрипт клонирует репозитории и покажет инструкции. Необходимо заполнить 3 файла:
+
+### 1. Конфигурация бота — `/root/bot/.env`
+
+Обязательные переменные:
+
+| Переменная | Описание |
+|------------|----------|
+| `BOT_TOKEN` | Токен бота от [@BotFather](https://t.me/BotFather) |
+| `ADMIN_IDS` | Telegram ID администратора |
+| `WEB_API_ENABLED=true` | Включить веб-сервер (обязательно для кабинета) |
+| `CABINET_ENABLED=true` | Включить Cabinet API |
+| `CABINET_ALLOWED_ORIGINS` | Домен кабинета, например `https://cabinet.example.com` |
+| `CABINET_JWT_SECRET` | Секрет для JWT (`openssl rand -hex 32`) |
+| `REMNAWAVE_API_URL` | URL панели Remnawave |
+| `REMNAWAVE_API_KEY` | API ключ панели Remnawave |
+
+Полный список переменных — в файле `.env.example` в репозитории бота.
+
+### 2. Конфигурация кабинета — `/root/cabinet/.env`
+
+| Переменная | Описание |
+|------------|----------|
+| `VITE_TELEGRAM_BOT_USERNAME` | Username бота без `@` |
+| `VITE_API_URL` | Путь к API (по умолчанию `/api`) |
+| `VITE_APP_NAME` | Название в шапке (по умолчанию `Cabinet`) |
+
+### 3. Домены в Caddyfile — `/root/caddy/Caddyfile`
+
+Замените `bot.example.com` и `cabinet.example.com` на ваши реальные домены:
+
+```caddyfile
+bot.example.com {
+    encode gzip zstd
+    reverse_proxy remnawave_bot:8080
+}
+
+cabinet.example.com {
+    encode gzip zstd
+
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy remnawave_bot:8080
+    }
+
+    handle {
+        reverse_proxy cabinet_frontend:80
+    }
+}
+```
+
+> Caddy автоматически получает и обновляет SSL-сертификаты от Let's Encrypt.
+
+### Запуск
+
+После заполнения конфигов выберите **пункт 3** в главном меню панели.
+
+## 🖥 Панель управления
+
+```
+🚀 ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v15.0
+
+🖥 СТАТУС СЕРВЕРА:
+  ОС, Uptime, RAM, SSD, Docker
+
+📊 ВЕРСИИ КОМПОНЕНТОВ:
+  Бот: abc1234 (Актуально)
+  Кабинет: def5678 ➜ доступна ghi9012 [обновить]
+
+1. 🔄 Обновить Бота
+2. 🔄 Обновить Кабинет
+3. ▶️  Запустить проект (Bot + Cabinet + Caddy)
+4. 🛑 Остановить проект
+5. ⚙️  Редактор конфигураций
+6. 📋 Просмотр логов
+7. 🛡  Система и безопасность
+8. 🔄 Обновить статусы
+9. 📦 Обновить панель
+0. ❌ Выход
+```
+
+### Возможности
+
+| Функция | Описание |
+|---------|----------|
+| **Установка** | Автоматическое клонирование, подготовка `.env`, генерация Caddy-конфигов |
+| **Запуск / Остановка** | Запуск и остановка всех трёх сервисов одной командой |
+| **Обновление** | Обновление бота и кабинета до последней версии из `main` с автопересборкой |
+| **Откат** | Откат бота или кабинета на предыдущий commit |
+| **Конфигурации** | Редактирование `.env` бота, `.env` кабинета, Caddyfile через `nano` |
+| **Логи** | Просмотр логов любого компонента в реальном времени |
+| **Бэкапы** | Ручные и автоматические (ежедневные) бэкапы с ротацией |
+| **Очистка Docker** | Удаление неиспользуемых образов, контейнеров и томов |
+| **Самообновление** | Обновление самого скрипта панели |
+
+## 💾 Автоматические бэкапы
+
+Включение через меню **7 → 2**. Cron-задача запускается в 03:00 ежедневно:
+
+```
+0 3 * * * /root/st_village.sh cron_backup
+```
+
+- Бэкапы хранятся в `/root/backups/`
+- Хранится до 7 последних авто-бэкапов (ротация)
+- Из бэкапа исключаются `.venv`, `__pycache__`, `node_modules`, `.git`
+
+## 🛠 Ручной запуск бэкапа
+
+```bash
+./st_village.sh
+# Меню → 7 → 1
+```
+
+## 🔄 Обновление компонентов
+
+При обновлении бота или кабинета скрипт:
+
+1. Сохраняет текущий commit в `.last_commit`
+2. Делает `git fetch` + `git reset --hard origin/main`
+3. Пересобирает Docker-образы (`docker compose up -d --build`)
+
+При необходимости — откат через меню **7 → 4/5**.
+
+## ❓ FAQ
+
+### Скрипт падает с ошибкой «Нет доступа к интерактивному терминалу»
+
+Запускайте из обычной SSH-сессии, а не через `cron` или `nohup`.
+
+### Caddy не получает сертификат
+
+- Убедитесь, что порты 80 и 443 открыты
+- Домены указывают на IP вашего сервера (A-запись)
+- Не используйте `example.com` — замените на реальные домены
+
+### Кабинет показывает ошибку CORS
+
+Добавьте домен кабинета в `CABINET_ALLOWED_ORIGINS` в `/root/bot/.env` и перезапустите бот.
+
+### 502 Bad Gateway
+
+1. Проверьте, что бот запущен: `docker ps`
+2. Проверьте, что все контейнеры в одной сети: `docker network inspect remnawave-network`
+
+### Как полностью переустановить
+
+```bash
+cd /root
+docker compose -f bot/docker-compose.local.yml down -v
+docker compose -f cabinet/docker-compose.yml down -v
+docker compose -f caddy/docker-compose.yml down -v
+rm -rf bot cabinet caddy
+./st_village.sh
+```
+
+## 📎 Связанные проекты
+
+- [Bedolaga Telegram Bot](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot) — Backend бота
+- [Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet) — Web-кабинет
+- [Remnawave](https://github.com/remnawave/backend) — VPN-панель
+- [Документация Bedolaga](https://docs.bedolagam.ru/) — Полная документация
+- [Telegram-чат](https://t.me/+wTdMtSWq8YdmZmVi) — Чат поддержки
 
 ## 🤝 Поддержка
 Подкинуть на хлебушек:
@@ -118,5 +244,6 @@ source ~/.bashrc
 * USDT TRC20: TRu92kG4LZ7nmubW3o31x19WagejmNt9PC
 * BTC: bc1qy82xy9sqp2kq4rvqjqrvfdl9k0s7hvy7pk3rnt
 
-## 📜 Лицензия
+## 📄 Лицензия
+
 Этот проект распространяется под лицензией **MIT**.
