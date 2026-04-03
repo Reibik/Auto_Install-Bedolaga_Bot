@@ -39,7 +39,7 @@
 Выполните эту команду в терминале вашего сервера, чтобы скачать и запустить панель:
 
 ```bash
-wget -qO /root/st_village.sh https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/st_village.sh && chmod +x /root/st_village.sh && /root/st_village.sh
+bash <(curl -sL https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/st_village.sh)
 
 ```
 
