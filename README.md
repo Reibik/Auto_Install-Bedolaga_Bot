@@ -39,7 +39,7 @@
 Выполните эту команду в терминале вашего сервера, чтобы скачать и запустить панель:
 
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/st_village.sh)
+curl -sL https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/st_village.sh | sed 's/\r$//' | bash
 
 ```
 
