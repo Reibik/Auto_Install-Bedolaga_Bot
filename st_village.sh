@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # ====================================================
-# ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v16.0
+# ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v17.0
 # Enhanced Edition for Bedolaga Bot + Cabinet + Caddy
 # ====================================================
 
@@ -17,7 +17,7 @@ BLUE='\033[0;34m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-PANEL_VERSION="16.0"
+PANEL_VERSION="17.0"
 
 BASE_DIR="/root"
 BOT_DIR="${BASE_DIR}/bot"
@@ -37,6 +37,10 @@ CADDY_COMPOSE_FILE="${CADDY_DIR}/docker-compose.yml"
 CADDYFILE="${CADDY_DIR}/Caddyfile"
 
 NOTIFY_FLAG="${BASE_DIR}/.notify_enabled"
+ENCRYPT_FLAG="${BASE_DIR}/.encrypt_backups"
+HEALTHCHECK_FLAG="${BASE_DIR}/.healthcheck_enabled"
+STV_LOG_FILE="/var/log/st_village.log"
+MAX_ROLLBACK_DEPTH=5
 
 BOT_VER_TXT=""
 CAB_VER_TXT=""
@@ -52,13 +56,37 @@ SCRIPT_PATH=""
 TTY_READY=0
 
 # ============================================================
+#  TRAP (cleanup on error)
+# ============================================================
+
+_stv_trap() {
+    local exit_code=$?
+    if [[ $exit_code -ne 0 ]]; then
+        echo "[$(date +'%Y-%m-%d %H:%M:%S')] [ERROR] Скрипт прерван с ошибкой (код $exit_code)" >> "$STV_LOG_FILE" 2>/dev/null || true
+        if [[ "${TTY_READY:-0}" -eq 1 ]]; then
+            echo -e "\n${RED}[!] Скрипт прерван с ошибкой (код $exit_code)${NC}" >&2
+            echo -e "${YELLOW}Проверьте состояние сервисов: docker ps${NC}" >&2
+        fi
+    fi
+}
+trap _stv_trap EXIT INT TERM
+
+# ============================================================
 #  LOGGING
 # ============================================================
 
-log()  { echo -e "${BLUE}[$(date +'%H:%M:%S')]${NC} $*"; }
-ok()   { echo -e "${GREEN}[✓]${NC} $*"; }
-warn() { echo -e "${YELLOW}[!]${NC} $*"; }
-err()  { echo -e "${RED}[✗]${NC} $*" >&2; }
+_log_to_file() {
+    local level="$1"
+    shift
+    local timestamp
+    timestamp="$(date +'%Y-%m-%d %H:%M:%S')"
+    printf '[%s] [%s] %s\n' "$timestamp" "$level" "$*" >> "$STV_LOG_FILE" 2>/dev/null || true
+}
+
+log()  { echo -e "${BLUE}[$(date +'%H:%M:%S')]${NC} $*";           _log_to_file "INFO" "$*"; }
+ok()   { echo -e "${GREEN}[✓]${NC} $*";                              _log_to_file "OK" "$*"; }
+warn() { echo -e "${YELLOW}[!]${NC} $*";                             _log_to_file "WARN" "$*"; }
+err()  { echo -e "${RED}[✗]${NC} $*" >&2;                            _log_to_file "ERROR" "$*"; }
 
 die() {
     err "$*"
@@ -109,21 +137,27 @@ generate_secret() {
 }
 
 read_env_value() {
-    local env_file="$1"
-    local key="$2"
+    local env_file="$1" key="$2"
     [[ -f "$env_file" ]] || return 0
-    local line=""
-    line="$(grep -E "^${key}=" "$env_file" 2>/dev/null || true)"
-    [[ -n "$line" ]] || return 0
-    echo "$line" | cut -d '=' -f 2- | sed "s/^[\"']//;s/[\"']$//"
+    awk -F'=' -v k="$key" '
+        $1 == k {
+            val = substr($0, length(k) + 2)
+            gsub(/^[ \t"]+/, "", val)
+            gsub(/[ \t"]+$/, "", val)
+            print val
+            exit
+        }
+    ' "$env_file" 2>/dev/null
 }
 
 set_env_value() {
     local env_file="$1"
     local key="$2"
     local value="$3"
+    local escaped_value=""
+    escaped_value="$(printf '%s' "$value" | sed 's/[&/\]/\\&/g')"
     if grep -qE "^${key}=" "$env_file" 2>/dev/null; then
-        sed -i "s|^${key}=.*|${key}=${value}|" "$env_file"
+        sed -i "s|^${key}=.*|${key}=${escaped_value}|" "$env_file"
     else
         echo "${key}=${value}" >> "$env_file"
     fi
@@ -481,37 +515,39 @@ check_versions() {
     CAB_VER_TXT="${RED}Не установлен${NC}"
 
     if [[ -d "${BOT_DIR}/.git" ]]; then
+        local _tmpfile
+        _tmpfile="$(mktemp /tmp/stv_XXXXXX)"
         (
             cd "$BOT_DIR"
             git fetch origin main -q >/dev/null 2>&1 || true
             local_bot="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
             remote_bot="$(git rev-parse --short origin/main 2>/dev/null || echo '')"
             if [[ -n "$remote_bot" && "$local_bot" != "$remote_bot" ]]; then
-                BOT_VER_TXT="${YELLOW}${local_bot} ➜ доступна ${remote_bot}${NC} ${RED}[обновить]${NC}"
+                printf '%s' "${YELLOW}${local_bot} ➜ доступна ${remote_bot}${NC} ${RED}[обновить]${NC}" > "$_tmpfile"
             else
-                BOT_VER_TXT="${GREEN}${local_bot} (Актуально)${NC}"
+                printf '%s' "${GREEN}${local_bot} (Актуально)${NC}" > "$_tmpfile"
             fi
-            printf '%s' "$BOT_VER_TXT" > /tmp/stv_bot_ver.$$
         )
-        BOT_VER_TXT="$(cat /tmp/stv_bot_ver.$$ 2>/dev/null || printf '%s' "$BOT_VER_TXT")"
-        rm -f /tmp/stv_bot_ver.$$
+        BOT_VER_TXT="$(cat "$_tmpfile" 2>/dev/null || printf '%s' "${RED}Не установлен${NC}")"
+        rm -f "$_tmpfile"
     fi
 
     if [[ -d "${CABINET_DIR}/.git" ]]; then
+        local _tmpfile
+        _tmpfile="$(mktemp /tmp/stv_XXXXXX)"
         (
             cd "$CABINET_DIR"
             git fetch origin main -q >/dev/null 2>&1 || true
             local_cab="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
             remote_cab="$(git rev-parse --short origin/main 2>/dev/null || echo '')"
             if [[ -n "$remote_cab" && "$local_cab" != "$remote_cab" ]]; then
-                CAB_VER_TXT="${YELLOW}${local_cab} ➜ доступна ${remote_cab}${NC} ${RED}[обновить]${NC}"
+                printf '%s' "${YELLOW}${local_cab} ➜ доступна ${remote_cab}${NC} ${RED}[обновить]${NC}" > "$_tmpfile"
             else
-                CAB_VER_TXT="${GREEN}${local_cab} (Актуально)${NC}"
+                printf '%s' "${GREEN}${local_cab} (Актуально)${NC}" > "$_tmpfile"
             fi
-            printf '%s' "$CAB_VER_TXT" > /tmp/stv_cab_ver.$$
         )
-        CAB_VER_TXT="$(cat /tmp/stv_cab_ver.$$ 2>/dev/null || printf '%s' "$CAB_VER_TXT")"
-        rm -f /tmp/stv_cab_ver.$$
+        CAB_VER_TXT="$(cat "$_tmpfile" 2>/dev/null || printf '%s' "${RED}Не установлен${NC}")"
+        rm -f "$_tmpfile"
     fi
 }
 
@@ -1068,13 +1104,53 @@ rebuild_component() {
 }
 
 # ============================================================
+#  COMMIT HISTORY (rollback stack)
+# ============================================================
+
+push_commit_history() {
+    local dir="$1" commit="$2"
+    local history_file="${dir}/.commit_history"
+    echo "$commit" >> "$history_file"
+    tail -n "$MAX_ROLLBACK_DEPTH" "$history_file" > "${history_file}.tmp"
+    mv "${history_file}.tmp" "$history_file"
+}
+
+get_last_commit() {
+    local dir="$1"
+    local history_file="${dir}/.commit_history"
+    [[ -f "$history_file" ]] || return 1
+    tail -1 "$history_file" 2>/dev/null || return 1
+}
+
+list_commit_history() {
+    local dir="$1"
+    local history_file="${dir}/.commit_history"
+    [[ -f "$history_file" ]] || return 1
+    tac "$history_file" 2>/dev/null || true
+}
+
+pop_commit_history() {
+    local dir="$1"
+    local history_file="${dir}/.commit_history"
+    [[ -f "$history_file" ]] || return 0
+    local count
+    count="$(wc -l < "$history_file")"
+    if [[ "$count" -le 1 ]]; then
+        rm -f "$history_file"
+    else
+        head -n "$((count - 1))" "$history_file" > "${history_file}.tmp"
+        mv "${history_file}.tmp" "$history_file"
+    fi
+}
+
+# ============================================================
 #  UPDATE & ROLLBACK
 # ============================================================
 
 update_component() {
     local component="$1"
     local title="$2"
-    local target_dir old_commit new_commit
+    local target_dir old_commit new_commit branch
 
     case "$component" in
         bot) target_dir="$BOT_DIR" ;;
@@ -1091,23 +1167,30 @@ update_component() {
     old_commit="$(git -C "$target_dir" rev-parse --short HEAD 2>/dev/null || true)"
     [[ -n "$old_commit" ]] || { err "Не удалось определить текущий commit."; pause; return 1; }
 
-    printf '%s\n' "$old_commit" > "${target_dir}/.last_commit"
-    log "Текущая версия: ${old_commit}"
+    # Сохраняем в стек откатов
+    push_commit_history "$target_dir" "$old_commit"
+    log "Текущая версия: ${old_commit} (сохранено в историю откатов)"
 
-    git -C "$target_dir" fetch origin main >/dev/null 2>&1 || { err "Не удалось получить обновления."; pause; return 1; }
-    git -C "$target_dir" reset --hard origin/main >/dev/null 2>&1 || { err "Не удалось обновить код."; pause; return 1; }
+    # Выбор ветки
+    branch="main"
+    read_tty branch "  ${YELLOW}Ветка для обновления [${branch}]: ${NC}"
+    branch="${branch:-main}"
+
+    git -C "$target_dir" fetch origin "$branch" >/dev/null 2>&1 || { err "Не удалось получить обновления."; pop_commit_history "$target_dir"; pause; return 1; }
+    git -C "$target_dir" reset --hard "origin/$branch" >/dev/null 2>&1 || { err "Не удалось обновить код."; pop_commit_history "$target_dir"; pause; return 1; }
 
     new_commit="$(git -C "$target_dir" rev-parse --short HEAD 2>/dev/null || true)"
     normalize_project_files
 
     if [[ "$old_commit" == "$new_commit" ]]; then
         ok "Обновлений нет. Уже установлена последняя версия."
+        pop_commit_history "$target_dir"
         pause
         return 0
     fi
 
     rebuild_component "$component" || { pause; return 1; }
-    ok "${title} обновлен: ${old_commit} → ${new_commit}"
+    ok "${title} обновлен: ${old_commit} → ${new_commit} (ветка: ${branch})"
     send_telegram_notification "🔄 ${title} обновлен: ${old_commit} → ${new_commit}"
     pause
 }
@@ -1123,13 +1206,48 @@ rollback_component() {
         *) err "Неизвестный компонент: ${component}"; pause; return 1 ;;
     esac
 
-    [[ -f "${target_dir}/.last_commit" ]] || { err "Нет сохраненной версии для отката ${title}."; pause; return 1; }
-    last_commit="$(tr -d '\r\n' < "${target_dir}/.last_commit")"
-    [[ -n "$last_commit" ]] || { err "Файл .last_commit пустой."; pause; return 1; }
+    # Показать историю откатов
+    echo -e "\n${CYAN}========================================${NC}"
+    echo -e "${BOLD}[⏪] ИСТОРИЯ ВЕРСИЙ: ${title}${NC}"
+    echo -e "${CYAN}========================================${NC}"
+
+    local history
+    history="$(list_commit_history "$target_dir")"
+    if [[ -z "$history" ]]; then
+        # Fallback: проверить старый формат .last_commit
+        if [[ -f "${target_dir}/.last_commit" ]]; then
+            last_commit="$(tr -d '\r\n' < "${target_dir}/.last_commit")"
+            [[ -n "$last_commit" ]] || { err "Нет сохранённых версий для отката ${title}."; pause; return 1; }
+            echo -e "  ${YELLOW}Доступен откат (legacy): ${last_commit}${NC}"
+            push_commit_history "$target_dir" "$last_commit"
+            rm -f "${target_dir}/.last_commit"
+            last_commit="$(get_last_commit "$target_dir")"
+        else
+            err "Нет сохранённых версий для отката ${title}."
+            pause
+            return 1
+        fi
+    else
+        echo -e "  ${YELLOW}Последние версии (новые сверху):${NC}"
+        local idx=1
+        while IFS= read -r h; do
+            [[ -n "$h" ]] || continue
+            echo -e "    ${CYAN}${idx})${NC} ${h}"
+            idx=$((idx + 1))
+        done <<< "$history"
+        echo
+        last_commit="$(get_last_commit "$target_dir")"
+        echo -e "  Будет выполнен откат на: ${GREEN}${last_commit}${NC}"
+    fi
+
+    if ! confirm "Откатить ${title} на commit ${last_commit}?"; then
+        return 0
+    fi
 
     git -C "$target_dir" fetch origin main >/dev/null 2>&1 || true
     git -C "$target_dir" reset --hard "$last_commit" >/dev/null 2>&1 || { err "Не удалось откатить ${title}."; pause; return 1; }
 
+    pop_commit_history "$target_dir"
     normalize_project_files
     rebuild_component "$component" || { pause; return 1; }
 
@@ -1160,8 +1278,82 @@ backup_project() {
         -czf "$archive" -C "$BASE_DIR" . || return 1
 
     size="$(du -sh "$archive" | awk '{print $1}')"
-    ok "Бэкап создан: ${archive} (${size})"
-    send_telegram_notification "💾 Бэкап создан: backup_${prefix}_${ts}.tar.gz (${size})"
+    ok "Бэкап файлов: ${archive} (${size})"
+
+    # Бэкап базы данных
+    backup_database "$ts"
+
+    # Опциональное шифрование
+    if [[ -f "$ENCRYPT_FLAG" ]] && command_exists gpg; then
+        local encrypted="${archive}.gpg"
+        if gpg --batch --yes --symmetric --cipher-algo AES256 -o "$encrypted" "$archive" 2>/dev/null; then
+            rm -f "$archive"
+            archive="$encrypted"
+            ok "Бэкап зашифрован (GPG AES256)"
+        else
+            warn "Не удалось зашифровать бэкап. Сохранён без шифрования."
+        fi
+    fi
+
+    local final_size
+    final_size="$(du -sh "$archive" | awk '{print $1}')"
+    send_telegram_notification "💾 Бэкап создан: $(basename "$archive") (${final_size})"
+}
+
+# ============================================================
+#  DATABASE BACKUP
+# ============================================================
+
+backup_database() {
+    local ts="$1"
+    local db_archive="${BACKUP_DIR}/db_backup_${ts}.tar.gz"
+    local db_tmp
+    db_tmp="$(mktemp -d)"
+    local dumped=0
+
+    # PostgreSQL
+    local pg_container=""
+    pg_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -iE 'postgres' | head -1 || true)"
+    if [[ -z "$pg_container" ]]; then
+        # Попробовать найти через docker-compose бота
+        pg_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -iE 'bot.*db|bedolaga.*db' | head -1 || true)"
+    fi
+    if [[ -n "$pg_container" ]]; then
+        local pg_user="" pg_db=""
+        pg_user="$(read_env_value "${BOT_DIR}/.env" "POSTGRES_USER" 2>/dev/null || true)"
+        pg_db="$(read_env_value "${BOT_DIR}/.env" "POSTGRES_DB" 2>/dev/null || true)"
+        if [[ -n "$pg_user" && -n "$pg_db" ]]; then
+            if docker exec "$pg_container" pg_dump -U "$pg_user" "$pg_db" > "${db_tmp}/database.sql" 2>/dev/null; then
+                dumped=1
+            fi
+        else
+            if docker exec "$pg_container" pg_dumpall -U postgres > "${db_tmp}/database.sql" 2>/dev/null; then
+                dumped=1
+            fi
+        fi
+    fi
+
+    # Redis
+    local redis_container=""
+    redis_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -iE 'redis' | head -1 || true)"
+    if [[ -n "$redis_container" ]]; then
+        docker exec "$redis_container" redis-cli BGSAVE >/dev/null 2>&1 || true
+        sleep 1
+        if docker cp "${redis_container}:/data/dump.rdb" "${db_tmp}/redis_dump.rdb" 2>/dev/null; then
+            : # redis dump saved
+        fi
+    fi
+
+    if [[ "$dumped" -eq 1 ]] || [[ -f "${db_tmp}/redis_dump.rdb" ]]; then
+        tar -czf "$db_archive" -C "$db_tmp" . 2>/dev/null
+        local dsize
+        dsize="$(du -sh "$db_archive" | awk '{print $1}')"
+        ok "Бэкап БД: db_backup_${ts}.tar.gz (${dsize})"
+    else
+        warn "Не удалось создать бэкап БД (контейнеры БД не найдены или не запущены)"
+    fi
+
+    rm -rf "$db_tmp"
 }
 
 rotate_auto_backups() {
@@ -1174,13 +1366,7 @@ enable_auto_backup() {
 }
 
 disable_auto_backup() {
-    local current=""
-    current="$(crontab -l 2>/dev/null | grep -Fv "${DEFAULT_INSTALL_PATH} cron_backup" || true)"
-    if [[ -n "$current" ]]; then
-        printf '%s\n' "$current" | crontab -
-    else
-        crontab -r >/dev/null 2>&1 || true
-    fi
+    crontab -l 2>/dev/null | grep -Fv "${DEFAULT_INSTALL_PATH} cron_backup" | crontab - 2>/dev/null || true
 }
 
 list_backups() {
@@ -1209,7 +1395,7 @@ list_backups() {
     done
     echo
 
-    printf '%s\n' "${backups[@]}" > /tmp/stv_backup_list.$$
+    printf '%s\n' "${backups[@]}" > /tmp/stv_backup_list_"$$"
     return 0
 }
 
@@ -1219,8 +1405,8 @@ restore_backup() {
     local backups=()
     while IFS= read -r line; do
         backups+=("$line")
-    done < /tmp/stv_backup_list.$$
-    rm -f /tmp/stv_backup_list.$$
+    done < /tmp/stv_backup_list_"$$"
+    rm -f /tmp/stv_backup_list_"$$"
 
     local choice=""
     read_tty choice "  ${YELLOW}Номер бэкапа для восстановления (0 - отмена): ${NC}"
@@ -1583,10 +1769,34 @@ update_self() {
     echo -e "${BOLD}[📦] ОБНОВЛЕНИЕ ПАНЕЛИ${NC}"
     echo -e "${CYAN}========================================${NC}"
 
-    local tmp
+    local tmp tmp_sha
     tmp="$(mktemp)"
-    curl -fsSL "$SCRIPT_URL" -o "$tmp" || { rm -f "$tmp"; err "Не удалось скачать новую версию панели."; pause; return 1; }
+    tmp_sha="$(mktemp)"
+
+    curl -fsSL "$SCRIPT_URL" -o "$tmp" || { rm -f "$tmp" "$tmp_sha"; err "Не удалось скачать новую версию панели."; pause; return 1; }
     ensure_unix_file "$tmp"
+
+    # Проверка SHA256 (опционально — если файл .sha256 существует)
+    if curl -fsSL "${SCRIPT_URL}.sha256" -o "$tmp_sha" 2>/dev/null && [[ -s "$tmp_sha" ]]; then
+        local expected_sha actual_sha
+        expected_sha="$(awk '{print $1}' "$tmp_sha")"
+        actual_sha="$(sha256sum "$tmp" | awk '{print $1}')"
+        rm -f "$tmp_sha"
+        if [[ -n "$expected_sha" && "$actual_sha" != "$expected_sha" ]]; then
+            rm -f "$tmp"
+            err "SHA256 checksum mismatch!"
+            err "Ожидаемый: ${expected_sha}"
+            err "Получен:   ${actual_sha}"
+            warn "Возможна атака MITM. Обновление отменено."
+            pause
+            return 1
+        fi
+        ok "SHA256 checksum verified."
+    else
+        rm -f "$tmp_sha"
+        warn "Файл .sha256 не найден на сервере. Пропускаю проверку целостности."
+        warn "Для максимальной безопасности создайте ${SCRIPT_URL}.sha256 в репозитории."
+    fi
 
     if ! grep -qE '^#!/usr/bin/env bash|^#!/bin/bash' "$tmp"; then
         rm -f "$tmp"
@@ -1766,24 +1976,41 @@ system_security_menu() {
             notify_status="${RED}ВЫКЛ${NC}"
         fi
 
+        local hc_status=""
+        if [[ -f "$HEALTHCHECK_FLAG" ]]; then
+            hc_status="${GREEN}ВКЛ${NC}"
+        else
+            hc_status="${RED}ВЫКЛ${NC}"
+        fi
+
+        local enc_status=""
+        if [[ -f "$ENCRYPT_FLAG" ]]; then
+            enc_status="${GREEN}ВКЛ${NC}"
+        else
+            enc_status="${RED}ВЫКЛ${NC}"
+        fi
+
         echo -e "${BLUE}[Резервное копирование]${NC}"
-        echo -e "${GREEN}1.${NC}  💾 Создать ручной бэкап"
-        echo -e "${GREEN}2.${NC}  ⏱  Включить ежедневный авто-бэкап (03:00)"
-        echo -e "${RED}3.${NC}  🛑 Отключить авто-бэкап"
-        echo -e "${YELLOW}4.${NC}  📥 Восстановить из бэкапа"
+        echo -e "${GREEN}1.${NC}   💾 Создать ручной бэкап (файлы + БД)"
+        echo -e "${GREEN}2.${NC}   ⏱  Включить ежедневный авто-бэкап (03:00)"
+        echo -e "${RED}3.${NC}   🛑 Отключить авто-бэкап"
+        echo -e "${YELLOW}4.${NC}   📥 Восстановить из бэкапа"
         echo -e "${BLUE}[Откат]${NC}"
-        echo -e "${YELLOW}5.${NC}  ⏪ Откатить Бота"
-        echo -e "${YELLOW}6.${NC}  ⏪ Откатить Кабинет"
+        echo -e "${YELLOW}5.${NC}   ⏪ Откатить Бота"
+        echo -e "${YELLOW}6.${NC}   ⏪ Откатить Кабинет"
         echo -e "${BLUE}[Безопасность]${NC}"
-        echo -e "${CYAN}7.${NC}  🔥 Настроить UFW (файрвол)"
-        echo -e "${CYAN}8.${NC}  🛡  Установить Fail2ban"
-        echo -e "${CYAN}9.${NC}  🔔 Telegram-уведомления [${notify_status}]"
+        echo -e "${CYAN}7.${NC}   🔥 Настроить UFW (файрвол)"
+        echo -e "${CYAN}8.${NC}   🛡  Установить Fail2ban"
+        echo -e "${CYAN}9.${NC}   🔔 Telegram-уведомления [${notify_status}]"
+        echo -e "${BLUE}[Мониторинг]${NC}"
+        echo -e "${PURPLE}10.${NC} 📡 Авто-healthcheck [${hc_status}] (перезапуск при падении)"
+        echo -e "${PURPLE}11.${NC} 🔐 Шифрование бэкапов GPG [${enc_status}]"
         echo -e "${BLUE}[Обслуживание]${NC}"
-        echo -e "${PURPLE}10.${NC} 💿 Управление Swap"
-        echo -e "${PURPLE}11.${NC} 🧹 Очистить Docker от мусора"
-        echo -e "${PURPLE}12.${NC} 🚚 Миграция"
-        echo -e "${RED}13.${NC} 🗑  Полное удаление проекта"
-        echo -e "${RED}0.${NC}  ⬅️ Назад"
+        echo -e "${PURPLE}12.${NC} 💿 Управление Swap"
+        echo -e "${PURPLE}13.${NC} 🧹 Очистить Docker от мусора"
+        echo -e "${PURPLE}14.${NC} 🚚 Миграция"
+        echo -e "${RED}15.${NC} 🗑  Полное удаление проекта"
+        echo -e "${RED}0.${NC}   ⬅️ Назад"
 
         local sys_choice
         read_tty sys_choice "\n${YELLOW}Выберите действие ➤ ${NC}"
@@ -1810,16 +2037,18 @@ system_security_menu() {
             7) setup_ufw ;;
             8) setup_fail2ban ;;
             9) toggle_notifications ;;
-            10) manage_swap_menu ;;
-            11)
+            10) toggle_healthcheck ;;
+            11) toggle_encrypt_backups ;;
+            12) manage_swap_menu ;;
+            13)
                 if confirm "Это удалит ВСЕ неиспользуемые Docker-образы, контейнеры и тома. Продолжить?"; then
                     docker system prune -af --volumes || true
                     ok "Очистка завершена."
                 fi
                 pause
                 ;;
-            12) migration_menu ;;
-            13) full_uninstall ;;
+            14) migration_menu ;;
+            15) full_uninstall ;;
             0) return ;;
             *) warn "Неизвестная команда."; sleep 1 ;;
         esac
@@ -1916,12 +2145,87 @@ run_cron_backup() {
     backup_project "auto" && rotate_auto_backups
 }
 
+# ============================================================
+#  CRON HEALTHCHECK
+# ============================================================
+
+run_cron_healthcheck() {
+    require_root
+    resolve_script_path
+
+    local all_containers=("remnawave_bot" "cabinet_frontend" "cabinet-frontend" "st_village_caddy")
+    local unique_containers=()
+
+    for c in "${all_containers[@]}"; do
+        local skip=0
+        for uc in "${unique_containers[@]}"; do
+            [[ "$c" == "$uc" ]] && { skip=1; break; }
+        done
+        [[ "$skip" -eq 1 ]] || unique_containers+=("$c")
+    done
+
+    for container in "${unique_containers[@]}"; do
+        local running
+        running="$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)"
+        if [[ "$running" != "true" ]]; then
+            log "Healthcheck: ${container} не работает, перезапуск..."
+            docker restart "$container" >/dev/null 2>&1 || continue
+            sleep 5
+            running="$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)"
+            if [[ "$running" == "true" ]]; then
+                send_telegram_notification "⚠️ ${container} был перезапущен автоматически (healthcheck)"
+            else
+                send_telegram_notification "🔴 ${container} не удаётся запустить после автоматического перезапуска!"
+            fi
+        fi
+    done
+}
+
+toggle_healthcheck() {
+    if [[ -f "$HEALTHCHECK_FLAG" ]]; then
+        rm -f "$HEALTHCHECK_FLAG"
+        # Удалить cron задачу
+        crontab -l 2>/dev/null | grep -Fv "${DEFAULT_INSTALL_PATH} cron_healthcheck" | crontab - 2>/dev/null || true
+        ok "Автоматический healthcheck отключен."
+    else
+        touch "$HEALTHCHECK_FLAG"
+        persist_self_if_needed || warn "Не удалось сохранить панель для cron."
+        # Добавить cron задачу — каждые 5 минут
+        (crontab -l 2>/dev/null | grep -Fv "${DEFAULT_INSTALL_PATH} cron_healthcheck" || true; \
+         echo "*/5 * * * * ${DEFAULT_INSTALL_PATH} cron_healthcheck"; ) | crontab - 2>/dev/null
+        ok "Автоматический healthcheck включен (каждые 5 минут)."
+        send_telegram_notification "📡 Автоматический healthcheck включен (*/5 мин)"
+    fi
+    pause
+}
+
+toggle_encrypt_backups() {
+    if [[ -f "$ENCRYPT_FLAG" ]]; then
+        rm -f "$ENCRYPT_FLAG"
+        ok "Шифрование бэкапов отключено."
+    else
+        if ! command_exists gpg; then
+            log "Устанавливаю GPG..."
+            apt-get install -y gnupg >/dev/null 2>&1 || { err "Не удалось установить gnupg."; pause; return 1; }
+        fi
+        touch "$ENCRYPT_FLAG"
+        ok "Шифрование бэкапов включено (GPG AES256)."
+        warn "При восстановлении зашифрованного бэкапа потребуется пароль."
+    fi
+    pause
+}
+
 main() {
     require_root
     resolve_script_path
 
     if [[ "${1:-}" == "cron_backup" ]]; then
         run_cron_backup
+        exit 0
+    fi
+
+    if [[ "${1:-}" == "cron_healthcheck" ]]; then
+        run_cron_healthcheck
         exit 0
     fi
 
