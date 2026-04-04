@@ -12,27 +12,25 @@
 
 ## 📋 Что делает скрипт
 
-- Устанавливает Docker и все системные зависимости
-- Клонирует репозитории бота и кабинета
-- Генерирует конфигурации Caddy и docker-compose override
-- Автоматически генерирует JWT-секреты при установке
-- Предоставляет интерактивную панель управления для всех операций
-- Интерактивные мастера настройки `.env` с валидацией
-- Диагностика сервисов: health check, DNS, порты, SSL
-- Безопасность: UFW файрвол, Fail2ban
-- Telegram-уведомления о событиях
-- Восстановление из бэкапов, миграция между серверами
-- Управление Swap, полное удаление проекта
+- ✅ Устанавливает Docker и все системные зависимости
+- ✅ Клонирует репозитории бота и кабинета
+- ✅ Генерирует конфигурации Caddy и docker-compose override
+- ✅ Автоматически генерирует JWT-секреты при установке
+- ✅ Предоставляет интерактивную панель управления для всех операций
+- ✅ Интерактивные мастера настройки `.env` с валидацией
+- ✅ Диагностика сервисов: health check, DNS, порты, SSL
+- ✅ Безопасность: UFW файрвол, Fail2ban
+- ✅ Telegram-уведомления о событиях
+- ✅ Восстановление из бэкапов, миграция между серверами
+- ✅ Управление Swap, полное удаление проекта
 
 ## ⚡ Быстрый старт
-
-*<img width="484" height="562" alt="image" src="https://github.com/user-attachments/assets/09837048-c7f4-46bd-a1d8-5b104866dcce" />*
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/st_village.sh)
 ```
 
-Или вручную:
+**Или вручную:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/st_village.sh -o /root/st_village.sh
@@ -44,16 +42,16 @@ chmod +x /root/st_village.sh
 
 ## 📌 Требования
 
-| Компонент | Минимум |
-|-----------|---------|
-| ОС | Ubuntu 20.04+ / Debian 11+ |
-| RAM | 1 GB |
-| Диск | 5 GB свободно |
-| Права | root |
-| Сеть | Открытые порты 80 и 443 |
-| Домены | 2 домена (для бота и кабинета), направленные A-записью на IP сервера |
+| Компонент | Минимум | Рекомендуется |
+|-----------|---------|---------------|
+| **ОС** | Ubuntu 20.04+ / Debian 11+ | Ubuntu 22.04 LTS |
+| **RAM** | 1 GB | 2 GB |
+| **Диск** | 5 GB свободно | 10 GB |
+| **Права** | root | root |
+| **Сеть** | Открытые порты 80 и 443 | Статический IP |
+| **Домены** | 2 домена с A-записями | С настроенным DNS |
 
-Docker и Docker Compose устанавливаются автоматически, если не обнаружены.
+> Docker и Docker Compose устанавливаются автоматически, если не обнаружены.
 
 ## 🏗 Архитектура
 
@@ -149,7 +147,7 @@ cabinet.example.com {
 ## 🖥 Панель управления
 
 <p align="center">
-  <img src="assets/panel_preview.svg" alt="ST Village Panel v16.0" width="820"/>
+  <img src="assets/panel_preview.svg" alt="ST Village Panel v17.0" width="820"/>
 </p>
 
 ### Возможности
@@ -330,11 +328,28 @@ rm -rf bot cabinet caddy
 - [Telegram-чат](https://t.me/+wTdMtSWq8YdmZmVi) — Чат поддержки
 
 ## 🤝 Поддержка
-Подкинуть на хлебушек:
-* TON: UQBoEJvftr-Lz4xZoXSDRlJQbaRC_nZoMhvbi9ufeiMNLTOb
-* USDT TRC20: TRu92kG4LZ7nmubW3o31x19WagejmNt9PC
-* BTC: bc1qy82xy9sqp2kq4rvqjqrvfdl9k0s7hvy7pk3rnt
+
+Если проект оказался полезным, можете поддержать разработку:
+
+- **TON:** `UQBoEJvftr-Lz4xZoXSDRlJQbaRC_nZoMhvbi9ufeiMNLTOb`
+- **USDT TRC20:** `TRu92kG4LZ7nmubW3o31x19WagejmNt9PC`
+- **BTC:** `bc1qy82xy9sqp2kq4rvqjqrvfdl9k0s7hvy7pk3rnt`
+
+## 🤝 Вклад в проект
+
+Проект открыт для улучшений! Если вы нашли баг или хотите предложить новую функцию:
+
+1. 🐛 [Создайте Issue](https://github.com/Reibik/Auto_Install-Bedolaga_Bot/issues/new)
+2. 🔀 Сделайте Fork репозитория
+3. ✨ Внесите изменения
+4. 📬 Создайте Pull Request
 
 ## 📄 Лицензия
 
-Этот проект распространяется под лицензией **MIT**.
+Этот проект распространяется под лицензией **MIT**. См. [LICENSE](LICENSE) для подробностей.
+
+---
+
+<p align="center">
+  Сделано с ❤️ для сообщества Bedolaga
+</p>
