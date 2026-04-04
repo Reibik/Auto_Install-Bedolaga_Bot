@@ -1,0 +1,54 @@
+# Пример Caddyfile
+# Скопируйте этот файл в /root/caddy/Caddyfile и замените домены на свои
+
+# ============================================================
+# BOT API
+# ============================================================
+bot.example.com {
+    # Сжатие ответов
+    encode gzip zstd
+    
+    # Проксирование на бота
+    reverse_proxy remnawave_bot:8080
+    
+    # Логирование
+    log {
+        output file /var/log/caddy/bot.log
+        format json
+    }
+}
+
+# ============================================================
+# CABINET (Frontend + API)
+# ============================================================
+cabinet.example.com {
+    # Сжатие ответов
+    encode gzip zstd
+    
+    # API запросы проксируем на бота
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy remnawave_bot:8080
+    }
+    
+    # Остальные запросы на фронтенд
+    handle {
+        reverse_proxy cabinet_frontend:80
+    }
+    
+    # Логирование
+    log {
+        output file /var/log/caddy/cabinet.log
+        format json
+    }
+}
+
+# ============================================================
+# ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ
+# ============================================================
+
+# Глобальные настройки (опционально)
+# {
+#     email your-email@example.com
+#     admin off
+# }
