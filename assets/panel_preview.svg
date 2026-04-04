@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="920" viewBox="0 0 820 920">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;display=swap');
+      .term-bg { fill: #1e1e2e; }
+      .title-bar { fill: #181825; }
+      .btn-red { fill: #f38ba8; }
+      .btn-yellow { fill: #f9e2af; }
+      .btn-green { fill: #a6e3a1; }
+      .title-text { fill: #cdd6f4; font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace; font-size: 13px; }
+      text { font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Courier New', monospace; font-size: 14px; }
+      .purple { fill: #cba6f7; }
+      .cyan { fill: #89dceb; }
+      .cyan-b { fill: #89dceb; font-weight: bold; }
+      .green { fill: #a6e3a1; }
+      .red { fill: #f38ba8; }
+      .yellow { fill: #f9e2af; }
+      .blue { fill: #89b4fa; }
+      .bold { fill: #cdd6f4; font-weight: bold; }
+      .normal { fill: #cdd6f4; }
+      .dim { fill: #6c7086; }
+    </style>
+  </defs>
+
+  <!-- Terminal window -->
+  <rect class="term-bg" width="820" height="920" rx="12" ry="12"/>
+
+  <!-- Title bar -->
+  <rect class="title-bar" width="820" height="40" rx="12" ry="12"/>
+  <rect class="title-bar" width="820" height="20" y="20"/>
+
+  <!-- Window buttons -->
+  <circle class="btn-red" cx="24" cy="20" r="7"/>
+  <circle class="btn-yellow" cx="48" cy="20" r="7"/>
+  <circle class="btn-green" cx="72" cy="20" r="7"/>
+
+  <!-- Title -->
+  <text class="title-text" x="410" y="25" text-anchor="middle">root@server: ~/st_village.sh</text>
+
+  <!-- Content -->
+  <g transform="translate(20, 60)">
+    <!-- Header -->
+    <text class="purple" x="0" y="0">====================================================</text>
+    <text class="cyan-b" x="0" y="22"> 🚀 ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v16.0 🚀</text>
+    <text class="purple" x="0" y="44">====================================================</text>
+    <text class="normal" x="0" y="66">📂 Ядро проекта:   <tspan class="green">/root</tspan></text>
+    <text class="purple" x="0" y="88">----------------------------------------------------</text>
+
+    <!-- Server status -->
+    <text class="bold" x="0" y="114">🖥 СТАТУС СЕРВЕРА:</text>
+    <text class="normal" x="0" y="138">🧩 ОС:                   <tspan class="cyan">Ubuntu 22.04.4 LTS</tspan></text>
+    <text class="normal" x="0" y="160">⏱ Uptime:               <tspan class="cyan">12 days, 7 hours</tspan></text>
+    <text class="normal" x="0" y="182">💾 RAM:                  <tspan class="cyan">743 / 2048 MB (36.3%)</tspan></text>
+    <text class="normal" x="0" y="204">💽 SSD:                  <tspan class="cyan">8.2G / 40G (21%)</tspan></text>
+    <text class="normal" x="0" y="226">🐳 Docker:               <tspan class="green">Запущено 3 из 3</tspan></text>
+    <text class="purple" x="0" y="248">----------------------------------------------------</text>
+
+    <!-- Versions -->
+    <text class="bold" x="0" y="274">📊 ВЕРСИИ КОМПОНЕНТОВ:</text>
+    <text class="normal" x="0" y="298">🤖 Бот:     <tspan class="green">a3f8c12 (Актуально)</tspan></text>
+    <text class="normal" x="0" y="320">🖥 Кабинет: <tspan class="yellow">e7b21d4 ➜ доступна f9c34a1</tspan> <tspan class="red">[обновить]</tspan></text>
+    <text class="purple" x="0" y="342">----------------------------------------------------</text>
+
+    <!-- Health -->
+    <text class="bold" x="0" y="368">🏥 СОСТОЯНИЕ СЕРВИСОВ:</text>
+    <text class="normal" x="0" y="392">🤖 Бот:     <tspan class="green">⬤ Работает</tspan></text>
+    <text class="normal" x="0" y="414">🖥 Кабинет: <tspan class="green">⬤ Работает</tspan></text>
+    <text class="normal" x="0" y="436">🌐 Caddy:   <tspan class="green">⬤ Работает</tspan></text>
+    <text class="purple" x="0" y="458">----------------------------------------------------</text>
+
+    <!-- Menu -->
+    <text y="488"><tspan class="green">1.</tspan><tspan class="normal">  🔄 Обновить Бота</tspan></text>
+    <text y="512"><tspan class="green">2.</tspan><tspan class="normal">  🔄 Обновить Кабинет</tspan></text>
+    <text y="536"><tspan class="blue">3.</tspan><tspan class="normal">  ▶️  Запустить проект (Bot + Cabinet + Caddy)</tspan></text>
+    <text y="560"><tspan class="red">4.</tspan><tspan class="normal">  🛑 Остановить проект</tspan></text>
+    <text y="584"><tspan class="cyan">5.</tspan><tspan class="normal">  🔃 Перезапуск компонентов</tspan></text>
+    <text y="608"><tspan class="yellow">6.</tspan><tspan class="normal">  ⚙️  Редактор конфигураций</tspan></text>
+    <text y="632"><tspan class="yellow">7.</tspan><tspan class="normal">  📋 Просмотр логов</tspan></text>
+    <text y="656"><tspan class="blue">8.</tspan><tspan class="normal">  🔍 Диагностика</tspan></text>
+    <text y="680"><tspan class="purple">9.</tspan><tspan class="normal">  🛡  Система и безопасность</tspan></text>
+    <text y="704"><tspan class="yellow">10.</tspan><tspan class="normal"> 🔄 Обновить статусы</tspan></text>
+    <text y="728"><tspan class="bold">11.</tspan><tspan class="normal"> 📦 Обновить панель</tspan></text>
+    <text y="752"><tspan class="red">0.</tspan><tspan class="normal">  ❌ Выход</tspan></text>
+
+    <!-- Prompt -->
+    <text y="790"><tspan class="yellow">Выберите команду ➤ </tspan><tspan class="dim">█</tspan></text>
+  </g>
+</svg>
