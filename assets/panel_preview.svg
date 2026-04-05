@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="820" height="920" viewBox="0 0 820 920">
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="950" viewBox="0 0 820 950">
   <defs>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;display=swap');
@@ -23,7 +23,7 @@
   </defs>
 
   <!-- Terminal window -->
-  <rect class="term-bg" width="820" height="920" rx="12" ry="12"/>
+  <rect class="term-bg" width="820" height="950" rx="12" ry="12"/>
 
   <!-- Title bar -->
   <rect class="title-bar" width="820" height="40" rx="12" ry="12"/>
@@ -41,7 +41,7 @@
   <g transform="translate(20, 60)">
     <!-- Header -->
     <text class="purple" x="0" y="0">====================================================</text>
-    <text class="cyan-b" x="0" y="22"> 🚀 ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v16.0 🚀</text>
+    <text class="cyan-b" x="0" y="22"> 🚀 ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v19.0 🚀</text>
     <text class="purple" x="0" y="44">====================================================</text>
     <text class="normal" x="0" y="66">📂 Ядро проекта:   <tspan class="green">/root</tspan></text>
     <text class="purple" x="0" y="88">----------------------------------------------------</text>
@@ -79,10 +79,11 @@
     <text y="656"><tspan class="blue">8.</tspan><tspan class="normal">  🔍 Диагностика</tspan></text>
     <text y="680"><tspan class="purple">9.</tspan><tspan class="normal">  🛡  Система и безопасность</tspan></text>
     <text y="704"><tspan class="yellow">10.</tspan><tspan class="normal"> 🔄 Обновить статусы</tspan></text>
-    <text y="728"><tspan class="bold">11.</tspan><tspan class="normal"> 📦 Обновить панель</tspan></text>
-    <text y="752"><tspan class="red">0.</tspan><tspan class="normal">  ❌ Выход</tspan></text>
+    <text y="728"><tspan class="cyan">11.</tspan><tspan class="normal"> 🔍 Проверить обновления компонентов</tspan></text>
+    <text y="752"><tspan class="bold">12.</tspan><tspan class="normal"> 📦 Обновить панель</tspan></text>
+    <text y="776"><tspan class="red">0.</tspan><tspan class="normal">  ❌ Выход</tspan></text>
 
     <!-- Prompt -->
-    <text y="790"><tspan class="yellow">Выберите команду ➤ </tspan><tspan class="dim">█</tspan></text>
+    <text y="814"><tspan class="yellow">Выберите команду ➤ </tspan><tspan class="dim">█</tspan></text>
   </g>
 </svg>
