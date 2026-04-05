@@ -1,6 +1,6 @@
 # 🚀 ST Village — Auto Install Bedolaga Bot
 
-[![Version](https://img.shields.io/badge/version-17.0-blue.svg)](https://github.com/Reibik/Auto_Install-Bedolaga_Bot/releases)
+[![Version](https://img.shields.io/badge/version-18.0-blue.svg)](https://github.com/Reibik/Auto_Install-Bedolaga_Bot/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Shell Script](https://img.shields.io/badge/shell-bash-brightgreen.svg)](st_village.sh)
 
@@ -8,7 +8,7 @@
 
 Интерактивный bash-скрипт для автоматической установки и управления **[Bedolaga Telegram Bot](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot)** + **[Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet)** + **Caddy** (reverse proxy с автоматическим SSL).
 
-> **Версия 17.0** включает улучшенную проверку портов, конфигурируемые пути установки и расширенную документацию. См. [CHANGELOG.md](CHANGELOG.md) для полного списка изменений.
+> **Версия 18.0** — мониторинг сервисов (Health Check + Watchdog), DNS-валидация, логирование в файл, быстрый дашборд. См. [CHANGELOG.md](CHANGELOG.md) для полного списка изменений.
 
 ## 📋 Что делает скрипт
 
@@ -23,6 +23,10 @@
 - ✅ Telegram-уведомления о событиях
 - ✅ Восстановление из бэкапов, миграция между серверами
 - ✅ Управление Swap, полное удаление проекта
+- ✅ **v18.0** Автоматический health check каждые 10 мин. с Telegram-алертами
+- ✅ **v18.0** Watchdog — авто-рестарт упавших контейнеров
+- ✅ **v18.0** DNS-валидация перед запуском Caddy (предотвращение проблем SSL)
+- ✅ **v18.0** Логирование всех операций в файл с ротацией
 
 ## ⚡ Быстрый старт
 

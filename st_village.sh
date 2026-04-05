@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # ====================================================
-# ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v17.0
+# ST VILLAGE | ПАНЕЛЬ УПРАВЛЕНИЯ v18.0
 # Enhanced Edition for Bedolaga Bot + Cabinet + Caddy
 # ====================================================
 
@@ -23,7 +23,7 @@ NC='\033[0m'
 # ============================================================
 #  CONFIGURATION
 # ============================================================
-PANEL_VERSION="17.0"
+PANEL_VERSION="18.0"
 
 # Directories (configurable via environment variables)
 BASE_DIR="${ST_VILLAGE_BASE_DIR:-/root}"
@@ -53,6 +53,16 @@ HTTPS_PORT="${ST_VILLAGE_HTTPS_PORT:-443}"
 
 # Flags
 NOTIFY_FLAG="${BASE_DIR}/.notify_enabled"
+WATCHDOG_FLAG="${BASE_DIR}/.watchdog_enabled"
+HEALTHCHECK_FLAG="${BASE_DIR}/.healthcheck_enabled"
+
+# Logging
+LOG_FILE="${BASE_DIR}/st_village.log"
+LOG_MAX_SIZE=10485760  # 10 MB
+
+# Version cache
+VERSION_CACHE_FILE="/tmp/stv_version_cache"
+VERSION_CACHE_TTL=300  # 5 минут
 
 BOT_VER_TXT=""
 CAB_VER_TXT=""
@@ -66,15 +76,30 @@ DISK_TXT=""
 DOCKER_STAT=""
 SCRIPT_PATH=""
 TTY_READY=0
+STV_BACKUP_LIST_TMP=""
 
 # ============================================================
 #  LOGGING
 # ============================================================
 
-log()  { echo -e "${BLUE}[$(date +'%H:%M:%S')]${NC} $*"; }
-ok()   { echo -e "${GREEN}[✓]${NC} $*"; }
-warn() { echo -e "${YELLOW}[!]${NC} $*"; }
-err()  { echo -e "${RED}[✗]${NC} $*" >&2; }
+_log_to_file() {
+    local msg="$1"
+    [[ -n "${LOG_FILE:-}" ]] || return 0
+    # Ротация лога при превышении размера
+    if [[ -f "$LOG_FILE" ]]; then
+        local fsize=0
+        fsize="$(stat -c%s "$LOG_FILE" 2>/dev/null || echo 0)"
+        if [[ "$fsize" -gt "$LOG_MAX_SIZE" ]]; then
+            mv -f "$LOG_FILE" "${LOG_FILE}.old" 2>/dev/null || true
+        fi
+    fi
+    printf '[%s] %s\n' "$(date +'%Y-%m-%d %H:%M:%S')" "$msg" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+log()  { echo -e "${BLUE}[$(date +'%H:%M:%S')]${NC} $*"; _log_to_file "INFO: $*"; }
+ok()   { echo -e "${GREEN}[✓]${NC} $*"; _log_to_file "OK: $*"; }
+warn() { echo -e "${YELLOW}[!]${NC} $*"; _log_to_file "WARN: $*"; }
+err()  { echo -e "${RED}[✗]${NC} $*" >&2; _log_to_file "ERROR: $*"; }
 
 die() {
     err "$*"
@@ -160,7 +185,7 @@ send_telegram_notification() {
     local admin_id
     while IFS=',' read -ra ADDR; do
         for admin_id in "${ADDR[@]}"; do
-            admin_id="$(echo "$admin_id" | tr -d ' ')"
+            admin_id="${admin_id// /}"
             [[ -n "$admin_id" ]] || continue
             curl -sf -X POST "https://api.telegram.org/bot${bot_token}/sendMessage" \
                 -d "chat_id=${admin_id}" \
@@ -176,7 +201,7 @@ send_telegram_notification() {
 # ============================================================
 
 init_tty() {
-    if [[ "${1:-}" == "cron_backup" || "${1:-}" == "cron_healthcheck" ]]; then
+    if [[ "${1:-}" == "cron_backup" || "${1:-}" == "cron_healthcheck" || "${1:-}" == "cron_watchdog" ]]; then
         return 0
     fi
 
@@ -500,41 +525,70 @@ ensure_bot_network() {
 # ============================================================
 
 check_versions() {
+    # Полная проверка с git fetch (медленная, но точная)
     BOT_VER_TXT="${RED}Не установлен${NC}"
     CAB_VER_TXT="${RED}Не установлен${NC}"
 
     if [[ -d "${BOT_DIR}/.git" ]]; then
-        (
-            cd "$BOT_DIR"
+        BOT_VER_TXT="$(
+            cd "$BOT_DIR" || exit 1
             git fetch origin main -q >/dev/null 2>&1 || true
             local_bot="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
             remote_bot="$(git rev-parse --short origin/main 2>/dev/null || echo '')"
             if [[ -n "$remote_bot" && "$local_bot" != "$remote_bot" ]]; then
-                BOT_VER_TXT="${YELLOW}${local_bot} ➜ доступна ${remote_bot}${NC} ${RED}[обновить]${NC}"
+                printf '%s' "${YELLOW}${local_bot} ➜ доступна ${remote_bot}${NC} ${RED}[обновить]${NC}"
             else
-                BOT_VER_TXT="${GREEN}${local_bot} (Актуально)${NC}"
+                printf '%s' "${GREEN}${local_bot} (Актуально)${NC}"
             fi
-            printf '%s' "$BOT_VER_TXT" > /tmp/stv_bot_ver.$$
-        )
-        BOT_VER_TXT="$(cat /tmp/stv_bot_ver.$$ 2>/dev/null || printf '%s' "$BOT_VER_TXT")"
-        rm -f /tmp/stv_bot_ver.$$
+        )" || true
     fi
 
     if [[ -d "${CABINET_DIR}/.git" ]]; then
-        (
-            cd "$CABINET_DIR"
+        CAB_VER_TXT="$(
+            cd "$CABINET_DIR" || exit 1
             git fetch origin main -q >/dev/null 2>&1 || true
             local_cab="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
             remote_cab="$(git rev-parse --short origin/main 2>/dev/null || echo '')"
             if [[ -n "$remote_cab" && "$local_cab" != "$remote_cab" ]]; then
-                CAB_VER_TXT="${YELLOW}${local_cab} ➜ доступна ${remote_cab}${NC} ${RED}[обновить]${NC}"
+                printf '%s' "${YELLOW}${local_cab} ➜ доступна ${remote_cab}${NC} ${RED}[обновить]${NC}"
             else
-                CAB_VER_TXT="${GREEN}${local_cab} (Актуально)${NC}"
+                printf '%s' "${GREEN}${local_cab} (Актуально)${NC}"
             fi
-            printf '%s' "$CAB_VER_TXT" > /tmp/stv_cab_ver.$$
-        )
-        CAB_VER_TXT="$(cat /tmp/stv_cab_ver.$$ 2>/dev/null || printf '%s' "$CAB_VER_TXT")"
-        rm -f /tmp/stv_cab_ver.$$
+        )" || true
+    fi
+
+    # Сохранить кэш
+    printf '%s\n%s\n%s' "$BOT_VER_TXT" "$CAB_VER_TXT" "$(date +%s)" > "$VERSION_CACHE_FILE" 2>/dev/null || true
+}
+
+check_versions_cached() {
+    # Быстрая проверка — только локальные HEAD, без git fetch.
+    # Использует кэш если он свежий (< VERSION_CACHE_TTL секунд).
+    if [[ -f "$VERSION_CACHE_FILE" ]]; then
+        local cache_time=0 now=0
+        cache_time="$(sed -n '3p' "$VERSION_CACHE_FILE" 2>/dev/null || echo 0)"
+        now="$(date +%s)"
+        if [[ $((now - cache_time)) -lt "$VERSION_CACHE_TTL" ]]; then
+            BOT_VER_TXT="$(sed -n '1p' "$VERSION_CACHE_FILE" 2>/dev/null || true)"
+            CAB_VER_TXT="$(sed -n '2p' "$VERSION_CACHE_FILE" 2>/dev/null || true)"
+            return 0
+        fi
+    fi
+
+    # Кэш устарел — быстрая проверка без fetch
+    BOT_VER_TXT="${RED}Не установлен${NC}"
+    CAB_VER_TXT="${RED}Не установлен${NC}"
+
+    if [[ -d "${BOT_DIR}/.git" ]]; then
+        local local_bot=""
+        local_bot="$(git -C "$BOT_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+        BOT_VER_TXT="${GREEN}${local_bot}${NC}"
+    fi
+
+    if [[ -d "${CABINET_DIR}/.git" ]]; then
+        local local_cab=""
+        local_cab="$(git -C "$CABINET_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+        CAB_VER_TXT="${GREEN}${local_cab}${NC}"
     fi
 }
 
@@ -834,6 +888,48 @@ domain_wizard() {
 #  DIAGNOSTICS
 # ============================================================
 
+verify_domains_resolve() {
+    # Проверяет, что все домены из Caddyfile указывают на IP этого сервера.
+    # Возвращает 0 если всё ОК, 1 если есть проблемы.
+    local domains="" server_ip="" all_ok=0
+    domains="$(parse_caddyfile_domains 2>/dev/null || true)"
+    [[ -n "$domains" ]] || return 0  # нет доменов — нечего проверять
+
+    server_ip="$(get_server_ip)"
+    [[ "$server_ip" != "unknown" ]] || return 0
+
+    while IFS= read -r domain; do
+        [[ -n "$domain" ]] || continue
+        local resolved=""
+        if command_exists dig; then
+            resolved="$(dig +short "$domain" A 2>/dev/null | head -1 || true)"
+        fi
+        if [[ -z "$resolved" ]]; then
+            resolved="$(getent ahosts "$domain" 2>/dev/null | awk 'NR==1{print $1}' || true)"
+        fi
+
+        if [[ -z "$resolved" ]]; then
+            warn "Домен ${domain} не резолвится! DNS не настроен."
+            all_ok=1
+        elif [[ "$resolved" != "$server_ip" ]]; then
+            warn "Домен ${domain} → ${resolved} (ожидался ${server_ip})"
+            all_ok=1
+        fi
+    done <<< "$domains"
+
+    if [[ "$all_ok" -ne 0 ]]; then
+        echo
+        warn "DNS настроен некорректно. Caddy не сможет получить SSL-сертификаты!"
+        echo -e "  ${YELLOW}Убедитесь, что A-записи доменов указывают на ${CYAN}${server_ip}${NC}"
+        echo -e "  ${YELLOW}После изменения DNS подождите 5-10 минут для распространения.${NC}"
+        echo
+        if ! confirm "Продолжить запуск несмотря на проблемы DNS?"; then
+            return 1
+        fi
+    fi
+    return 0
+}
+
 check_dns() {
     echo -e "\n${BOLD}🌐 ПРОВЕРКА DNS${NC}"
     echo -e "${CYAN}----------------------------------------${NC}"
@@ -876,7 +972,7 @@ check_ports() {
     local port_info=""
     local has_conflicts=0
     
-    for port in ${HTTP_PORT} ${HTTPS_PORT}; do
+    for port in "${HTTP_PORT}" "${HTTPS_PORT}"; do
         port_info="$(ss -tlnp 2>/dev/null | grep ":${port} " || true)"
         if [[ -z "$port_info" ]]; then
             echo -e "  Порт ${CYAN}${port}${NC}: ${GREEN}свободен${NC}"
@@ -890,7 +986,7 @@ check_ports() {
         fi
     done
     
-    return $has_conflicts
+    return "$has_conflicts"
 }
 
 check_ports_before_install() {
@@ -900,7 +996,7 @@ check_ports_before_install() {
     local port_info=""
     local conflicts=()
     
-    for port in ${HTTP_PORT} ${HTTPS_PORT}; do
+    for port in "${HTTP_PORT}" "${HTTPS_PORT}"; do
         port_info="$(ss -tlnp 2>/dev/null | grep ":${port} " || true)"
         if [[ -n "$port_info" ]]; then
             local proc=""
@@ -1076,6 +1172,9 @@ start_project() {
 
     log "Запускаю Bedolaga Cabinet..."
     dc_cabinet up -d --build || { err "Не удалось запустить Cabinet."; pause; return 1; }
+
+    # DNS-валидация перед запуском Caddy
+    verify_domains_resolve || { pause; return 1; }
 
     log "Запускаю Caddy..."
     dc_caddy up -d || { err "Не удалось запустить Caddy."; pause; return 1; }
@@ -1277,7 +1376,8 @@ list_backups() {
     done
     echo
 
-    printf '%s\n' "${backups[@]}" > /tmp/stv_backup_list.$$
+    STV_BACKUP_LIST_TMP="$(mktemp)"
+    printf '%s\n' "${backups[@]}" > "$STV_BACKUP_LIST_TMP"
     return 0
 }
 
@@ -1287,8 +1387,8 @@ restore_backup() {
     local backups=()
     while IFS= read -r line; do
         backups+=("$line")
-    done < /tmp/stv_backup_list.$$
-    rm -f /tmp/stv_backup_list.$$
+    done < "$STV_BACKUP_LIST_TMP"
+    rm -f "$STV_BACKUP_LIST_TMP"
 
     local choice=""
     read_tty choice "  ${YELLOW}Номер бэкапа для восстановления (0 - отмена): ${NC}"
@@ -1834,6 +1934,20 @@ system_security_menu() {
             notify_status="${RED}ВЫКЛ${NC}"
         fi
 
+        local healthcheck_status=""
+        if [[ -f "$HEALTHCHECK_FLAG" ]]; then
+            healthcheck_status="${GREEN}ВКЛ${NC}"
+        else
+            healthcheck_status="${RED}ВЫКЛ${NC}"
+        fi
+
+        local watchdog_status=""
+        if [[ -f "$WATCHDOG_FLAG" ]]; then
+            watchdog_status="${GREEN}ВКЛ${NC}"
+        else
+            watchdog_status="${RED}ВЫКЛ${NC}"
+        fi
+
         echo -e "${BLUE}[Резервное копирование]${NC}"
         echo -e "${GREEN}1.${NC}  💾 Создать ручной бэкап"
         echo -e "${GREEN}2.${NC}  ⏱  Включить ежедневный авто-бэкап (03:00)"
@@ -1846,11 +1960,15 @@ system_security_menu() {
         echo -e "${CYAN}7.${NC}  🔥 Настроить UFW (файрвол)"
         echo -e "${CYAN}8.${NC}  🛡  Установить Fail2ban"
         echo -e "${CYAN}9.${NC}  🔔 Telegram-уведомления [${notify_status}]"
+        echo -e "${BLUE}[Мониторинг]${NC}"
+        echo -e "${CYAN}10.${NC} 🏥 Health Check (каждые 10 мин.) [${healthcheck_status}]"
+        echo -e "${CYAN}11.${NC} 🐕 Watchdog авто-рестарт (каждые 5 мин.) [${watchdog_status}]"
+        echo -e "${CYAN}12.${NC} 📄 Просмотр лога панели"
         echo -e "${BLUE}[Обслуживание]${NC}"
-        echo -e "${PURPLE}10.${NC} 💿 Управление Swap"
-        echo -e "${PURPLE}11.${NC} 🧹 Очистить Docker от мусора"
-        echo -e "${PURPLE}12.${NC} 🚚 Миграция"
-        echo -e "${RED}13.${NC} 🗑  Полное удаление проекта"
+        echo -e "${PURPLE}13.${NC} 💿 Управление Swap"
+        echo -e "${PURPLE}14.${NC} 🧹 Очистить Docker от мусора"
+        echo -e "${PURPLE}15.${NC} 🚚 Миграция"
+        echo -e "${RED}16.${NC} 🗑  Полное удаление проекта"
         echo -e "${RED}0.${NC}  ⬅️ Назад"
 
         local sys_choice
@@ -1878,16 +1996,42 @@ system_security_menu() {
             7) setup_ufw ;;
             8) setup_fail2ban ;;
             9) toggle_notifications ;;
-            10) manage_swap_menu ;;
+            10)
+                if [[ -f "$HEALTHCHECK_FLAG" ]]; then
+                    disable_cron_healthcheck
+                else
+                    enable_cron_healthcheck
+                fi
+                pause
+                ;;
             11)
+                if [[ -f "$WATCHDOG_FLAG" ]]; then
+                    disable_watchdog
+                else
+                    enable_watchdog
+                fi
+                pause
+                ;;
+            12)
+                if [[ -f "$LOG_FILE" ]]; then
+                    echo -e "\n${BOLD}📄 ПОСЛЕДНИЕ 50 СТРОК ЛОГА:${NC}"
+                    echo -e "${CYAN}----------------------------------------${NC}"
+                    tail -50 "$LOG_FILE" 2>/dev/null || warn "Не удалось прочитать лог."
+                else
+                    warn "Лог-файл ещё не создан: ${LOG_FILE}"
+                fi
+                pause
+                ;;
+            13) manage_swap_menu ;;
+            14)
                 if confirm "Это удалит ВСЕ неиспользуемые Docker-образы, контейнеры и тома. Продолжить?"; then
                     docker system prune -af --volumes || true
                     ok "Очистка завершена."
                 fi
                 pause
                 ;;
-            12) migration_menu ;;
-            13) full_uninstall ;;
+            15) migration_menu ;;
+            16) full_uninstall ;;
             0) return ;;
             *) warn "Неизвестная команда."; sleep 1 ;;
         esac
@@ -1900,7 +2044,7 @@ system_security_menu() {
 
 show_dashboard() {
     get_system_info
-    check_versions
+    check_versions_cached
     check_health_quick
 
     clear
@@ -1936,7 +2080,8 @@ show_dashboard() {
     echo -e "${BLUE}8.${NC}  🔍 Диагностика"
     echo -e "${PURPLE}9.${NC}  🛡  Система и безопасность"
     echo -e "${YELLOW}10.${NC} 🔄 Обновить статусы"
-    echo -e "${BOLD}11.${NC} 📦 Обновить панель"
+    echo -e "${CYAN}11.${NC} 🔍 Проверить обновления компонентов"
+    echo -e "${BOLD}12.${NC} 📦 Обновить панель"
     echo -e "${RED}0.${NC}  ❌ Выход"
 }
 
@@ -1962,7 +2107,13 @@ main_menu() {
             8) diagnostics_menu ;;
             9) system_security_menu ;;
             10) ;;
-            11) update_self ;;
+            11)
+                log "Проверяю обновления компонентов..."
+                check_versions
+                ok "Версии обновлены."
+                sleep 1
+                ;;
+            12) update_self ;;
             0)
                 clear
                 echo -e "${GREEN}Успешной работы в ST VILLAGE!${NC}\n"
@@ -1984,14 +2135,167 @@ run_cron_backup() {
     backup_project "auto" && rotate_auto_backups
 }
 
+# ============================================================
+#  CRON HEALTH CHECK
+# ============================================================
+
+run_cron_healthcheck() {
+    require_root
+    resolve_script_path
+
+    command_exists docker || exit 0
+
+    local problems=()
+
+    # Проверка контейнеров
+    local containers=("remnawave_bot" "cabinet_frontend" "st_village_caddy")
+    local labels=("Bot" "Cabinet" "Caddy")
+    local i=0
+    for cname in "${containers[@]}"; do
+        local state=""
+        state="$(docker inspect -f '{{.State.Running}}' "$cname" 2>/dev/null || true)"
+        if [[ "$state" != "true" ]]; then
+            problems+=("${labels[$i]}: контейнер не работает")
+        fi
+        i=$((i + 1))
+    done
+
+    # Проверка HTTP-доступности доменов
+    local domains=""
+    domains="$(parse_caddyfile_domains 2>/dev/null || true)"
+    if [[ -n "$domains" ]]; then
+        while IFS= read -r domain; do
+            [[ -n "$domain" ]] || continue
+            local http_code=""
+            http_code="$(curl -sf -o /dev/null -w '%{http_code}' --connect-timeout 10 "https://${domain}/" 2>/dev/null || echo "000")"
+            if [[ "${http_code:-000}" == "000" ]]; then
+                problems+=("HTTPS: ${domain} недоступен")
+            fi
+        done <<< "$domains"
+    fi
+
+    # Проверка SSL-сертификатов (предупреждение за 7 дней)
+    if [[ -n "$domains" ]]; then
+        while IFS= read -r domain; do
+            [[ -n "$domain" ]] || continue
+            local expiry=""
+            expiry="$(echo | openssl s_client -connect "${domain}:443" -servername "$domain" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d '=' -f 2 || true)"
+            if [[ -n "$expiry" ]]; then
+                local expiry_epoch=0 now_epoch=0 days_left=0
+                expiry_epoch="$(date -d "$expiry" +%s 2>/dev/null || echo 0)"
+                now_epoch="$(date +%s)"
+                if [[ "$expiry_epoch" -gt 0 ]]; then
+                    days_left="$(( (expiry_epoch - now_epoch) / 86400 ))"
+                    if [[ "$days_left" -lt 7 ]]; then
+                        problems+=("SSL: ${domain} истекает через ${days_left} дн.")
+                    fi
+                fi
+            fi
+        done <<< "$domains"
+    fi
+
+    # Отправка уведомления если есть проблемы
+    if [[ ${#problems[@]} -gt 0 ]]; then
+        local msg="⚠️ Обнаружены проблемы:\n"
+        for p in "${problems[@]}"; do
+            msg+="• ${p}\n"
+        done
+        _log_to_file "HEALTHCHECK FAILED: ${problems[*]}"
+        send_telegram_notification "$msg"
+    else
+        _log_to_file "HEALTHCHECK OK: все сервисы работают"
+    fi
+}
+
+enable_cron_healthcheck() {
+    persist_self_if_needed || warn "Не удалось сохранить панель в ${DEFAULT_INSTALL_PATH}"
+    local cron_line="*/10 * * * * ${DEFAULT_INSTALL_PATH} cron_healthcheck"
+    (crontab -l 2>/dev/null | grep -v "cron_healthcheck"; echo "$cron_line") | crontab -
+    touch "$HEALTHCHECK_FLAG"
+    ok "Health check включен (каждые 10 минут)."
+    _log_to_file "Cron healthcheck enabled"
+}
+
+disable_cron_healthcheck() {
+    crontab -l 2>/dev/null | grep -v "cron_healthcheck" | crontab - 2>/dev/null || true
+    rm -f "$HEALTHCHECK_FLAG"
+    ok "Health check отключен."
+    _log_to_file "Cron healthcheck disabled"
+}
+
+# ============================================================
+#  CONTAINER WATCHDOG
+# ============================================================
+
+run_cron_watchdog() {
+    require_root
+    resolve_script_path
+
+    command_exists docker || exit 0
+
+    local containers=("remnawave_bot" "cabinet_frontend" "st_village_caddy")
+    local labels=("Bot" "Cabinet" "Caddy")
+    local restarted=()
+    local i=0
+
+    for cname in "${containers[@]}"; do
+        local state=""
+        state="$(docker inspect -f '{{.State.Running}}' "$cname" 2>/dev/null || true)"
+        if [[ "$state" == "false" ]]; then
+            _log_to_file "WATCHDOG: ${labels[$i]} ($cname) остановлен, перезапускаю..."
+            if docker start "$cname" 2>/dev/null; then
+                restarted+=("${labels[$i]}")
+                _log_to_file "WATCHDOG: ${labels[$i]} успешно перезапущен"
+            else
+                _log_to_file "WATCHDOG: не удалось перезапустить ${labels[$i]}"
+            fi
+        fi
+        i=$((i + 1))
+    done
+
+    if [[ ${#restarted[@]} -gt 0 ]]; then
+        local msg="🔄 Watchdog перезапустил:"
+        for r in "${restarted[@]}"; do
+            msg+="\n• ${r}"
+        done
+        send_telegram_notification "$msg"
+    fi
+}
+
+enable_watchdog() {
+    persist_self_if_needed || warn "Не удалось сохранить панель в ${DEFAULT_INSTALL_PATH}"
+    local cron_line="*/5 * * * * ${DEFAULT_INSTALL_PATH} cron_watchdog"
+    (crontab -l 2>/dev/null | grep -v "cron_watchdog"; echo "$cron_line") | crontab -
+    touch "$WATCHDOG_FLAG"
+    ok "Watchdog включен (каждые 5 минут)."
+    _log_to_file "Watchdog enabled"
+}
+
+disable_watchdog() {
+    crontab -l 2>/dev/null | grep -v "cron_watchdog" | crontab - 2>/dev/null || true
+    rm -f "$WATCHDOG_FLAG"
+    ok "Watchdog отключен."
+    _log_to_file "Watchdog disabled"
+}
+
 main() {
     require_root
     resolve_script_path
 
-    if [[ "${1:-}" == "cron_backup" ]]; then
-        run_cron_backup
-        exit 0
-    fi
+    case "${1:-}" in
+        cron_backup)
+            run_cron_backup
+            exit 0
+            ;;
+        cron_healthcheck)
+            run_cron_healthcheck
+            exit 0
+            ;;
+        cron_watchdog)
+            run_cron_watchdog
+            exit 0
+            ;;
+    esac
 
     init_tty "${1:-}"
     ensure_dirs

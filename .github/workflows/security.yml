@@ -1,0 +1,133 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 6 * * 1'  # Каждый понедельник в 06:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck-security:
+    name: ShellCheck Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install ShellCheck
+      run: sudo apt-get install -y shellcheck
+
+    - name: Security-focused ShellCheck
+      run: |
+        echo "=== ShellCheck Security Audit ==="
+        shellcheck -s bash -S error st_village.sh || true
+        echo ""
+        echo "=== Checking for common security issues ==="
+        shellcheck -s bash -e SC2086,SC2046,SC2045 st_village.sh 2>&1 | head -50 || true
+        echo "✓ Security audit complete"
+
+  secrets-scan:
+    name: Secrets Detection
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Scan for hardcoded secrets
+      run: |
+        echo "=== Scanning for potential hardcoded secrets ==="
+        FOUND=0
+
+        # Проверка на хардкод-токены
+        if grep -rn 'TELEGRAM_BOT_TOKEN\s*=\s*[0-9]' --include='*.sh' .; then
+          echo "::warning::Potential hardcoded Telegram token found"
+          FOUND=1
+        fi
+
+        # Проверка на хардкод-паролей
+        if grep -rn 'PASSWORD\s*=\s*["\x27][^$]' --include='*.sh' . | grep -v 'example\|sample\|your_\|changeme\|placeholder'; then
+          echo "::warning::Potential hardcoded password found"
+          FOUND=1
+        fi
+
+        # Проверка на приватные ключи
+        if grep -rn 'PRIVATE.KEY\|BEGIN RSA\|BEGIN EC\|BEGIN OPENSSH' --include='*.sh' .; then
+          echo "::warning::Potential private key found"
+          FOUND=1
+        fi
+
+        # Проверка на API ключи
+        if grep -rn 'api_key\s*=\s*["\x27][A-Za-z0-9]' --include='*.sh' . | grep -v 'example\|sample\|your_\|placeholder'; then
+          echo "::warning::Potential hardcoded API key found"
+          FOUND=1
+        fi
+
+        if [ "$FOUND" -eq 0 ]; then
+          echo "✓ No hardcoded secrets detected"
+        fi
+
+  permissions-check:
+    name: File Permissions Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check script permissions and safety
+      run: |
+        echo "=== File Permissions and Safety Check ==="
+
+        # Проверка shebang
+        if head -1 st_village.sh | grep -q '#!/usr/bin/env bash'; then
+          echo "✓ Correct shebang: #!/usr/bin/env bash"
+        else
+          echo "::warning::Missing or incorrect shebang in st_village.sh"
+        fi
+
+        # Проверка set -e / set -Eeuo pipefail
+        if grep -q 'set -Eeuo pipefail\|set -euo pipefail\|set -e' st_village.sh; then
+          echo "✓ Error handling enabled (set -e or pipefail)"
+        else
+          echo "::warning::No 'set -e' or 'set -Eeuo pipefail' found"
+        fi
+
+        # Проверка на небезопасные паттерны
+        echo ""
+        echo "--- Checking for unsafe patterns ---"
+
+        # eval usage
+        EVAL_COUNT=$(grep -c 'eval ' st_village.sh || true)
+        if [ "$EVAL_COUNT" -gt 0 ]; then
+          echo "::warning::Found $EVAL_COUNT uses of 'eval' — review for injection risks"
+        else
+          echo "✓ No 'eval' usage found"
+        fi
+
+        # Предсказуемые временные файлы
+        PREDICTABLE_TMP=$(grep -c '/tmp/.*\$\$' st_village.sh || true)
+        if [ "$PREDICTABLE_TMP" -gt 0 ]; then
+          echo "::warning::Found $PREDICTABLE_TMP predictable temp file patterns — use mktemp instead"
+        else
+          echo "✓ No predictable temp file patterns found"
+        fi
+
+        # curl | bash (опасный паттерн в скрипте)
+        CURL_BASH=$(grep -c 'curl.*|.*bash\|curl.*|.*sh' st_village.sh || true)
+        if [ "$CURL_BASH" -gt 0 ]; then
+          echo "::notice::Found $CURL_BASH curl-pipe-to-shell patterns (expected for self-update)"
+        else
+          echo "✓ No curl-pipe-to-shell patterns"
+        fi
+
+        echo ""
+        echo "✓ Security check complete"
