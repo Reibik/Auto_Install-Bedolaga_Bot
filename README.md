@@ -7,8 +7,6 @@
 [![Last Commit](https://img.shields.io/github/last-commit/Reibik/Auto_Install-Bedolaga_Bot)](https://github.com/Reibik/Auto_Install-Bedolaga_Bot/commits/main)
 [![Code Size](https://img.shields.io/github/languages/code-size/Reibik/Auto_Install-Bedolaga_Bot)](https://github.com/Reibik/Auto_Install-Bedolaga_Bot)
 
-<img width="960" height="1115" alt="image" src="https://github.com/user-attachments/assets/9297d01e-8762-4856-863a-72ddadfaa277" />
-
 Интерактивный bash-скрипт для автоматической установки и управления **[Bedolaga Telegram Bot](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot)** + **[Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet)** + **Caddy** (reverse proxy с автоматическим SSL).
 
 > **Версия 19.0** — масштабный рефакторинг: скрипт уменьшен на 21% (2313 → 1819 строк), 13 хелпер-функций для дедупликации кода. См. [CHANGELOG.md](CHANGELOG.md) для полного списка изменений.
