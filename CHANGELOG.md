@@ -5,6 +5,32 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.0.0/),
 и этот проект придерживается [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [19.0] - 2026-04-05
+
+### Изменено (Рефакторинг)
+- **Размер скрипта уменьшен на 21%** — с 2313 до 1819 строк без потери функциональности
+- **Компактные разделители секций** — `# === SECTION ===` вместо 3-строчных блоков
+- **`_container_state()` + `_state_icon()`** — общие хелперы для docker inspect, заменили дублированный код в 4 местах (check_health_quick, health_check_full, run_cron_healthcheck, run_cron_watchdog)
+- **`_get_ver_txt()`** — единая функция проверки git-версий с режимами "full" (git fetch) и "fast" (local only), заменила дублирование в check_versions и check_versions_cached
+- **Слияние `check_ports` / `check_ports_before_install`** — одна функция `check_ports()` с параметром mode ("install"/"normal")
+- **`_resolve_domain()`** — общий DNS-резолвер, используется в verify_domains_resolve и check_dns
+- **`_menu_header()` / `_menu_choice()`** — дедупликация шапки меню и промпта выбора из 7+ мест
+- **`_cron_toggle()`** — универсальная функция enable/disable cron для backup, healthcheck, watchdog (заменила 6 отдельных функций)
+- **`_ssl_days_left()`** — общая SSL-проверка для check_ssl_certs и run_cron_healthcheck
+- **`_compose_stop_all()` / `_compose_down_all()`** — остановка/удаление всех сервисов из 3 мест
+- **`_prompt_env()`** — универсальный промпт для env wizard
+- **`_flag_status()`** — on/off статус флагов одной строкой
+- **`_ensure_env()`** — .env инициализация из .env.example
+
+### Удалено
+- `press_any_key_to_continue()` — dead code (был алиасом для `pause()`)
+- `enable_auto_backup()` / `disable_auto_backup()` — заменены на `_cron_toggle()`
+- `enable_cron_healthcheck()` / `disable_cron_healthcheck()` — заменены на `_cron_toggle()`
+- `enable_watchdog()` / `disable_watchdog()` — заменены на `_cron_toggle()`
+- `check_ports_before_install()` — слита в `check_ports()`
+
+---
+
 ## [18.0] - 2026-04-05
 
 ### Добавлено

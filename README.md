@@ -1,6 +1,6 @@
 # 🚀 ST Village — Auto Install Bedolaga Bot
 
-[![Version](https://img.shields.io/badge/version-18.0-blue.svg)](https://github.com/Reibik/Auto_Install-Bedolaga_Bot/releases)
+[![Version](https://img.shields.io/badge/version-19.0-blue.svg)](https://github.com/Reibik/Auto_Install-Bedolaga_Bot/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Shell Script](https://img.shields.io/badge/shell-bash-brightgreen.svg)](st_village.sh)
 
@@ -8,7 +8,7 @@
 
 Интерактивный bash-скрипт для автоматической установки и управления **[Bedolaga Telegram Bot](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot)** + **[Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet)** + **Caddy** (reverse proxy с автоматическим SSL).
 
-> **Версия 18.0** — мониторинг сервисов (Health Check + Watchdog), DNS-валидация, логирование в файл, быстрый дашборд. См. [CHANGELOG.md](CHANGELOG.md) для полного списка изменений.
+> **Версия 19.0** — масштабный рефакторинг: скрипт уменьшен на 21% (2313 -> 1819 строк), 13 хелпер-функций для дедупликации кода, все фичи v18.0 сохранены. См. [CHANGELOG.md](CHANGELOG.md) для полного списка изменений.
 
 ## 📋 Что делает скрипт
 
