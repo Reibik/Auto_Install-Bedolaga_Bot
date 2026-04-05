@@ -108,15 +108,26 @@ bash -n st_village.sh
 ## Структура проекта
 
 ```
-├── st_village.sh           # Основной скрипт панели управления
-├── docs/                   # Документация
-├── examples/               # Примеры конфигураций
-├── assets/                 # Медиа-ресурсы
-├── .github/workflows/      # GitHub Actions CI
-├── CHANGELOG.md            # История изменений
-├── CONTRIBUTING.md         # Это руководство
-├── SECURITY.md             # Политика безопасности
-└── LICENSE                 # MIT лицензия
+├── st_village.sh               # Основной скрипт панели (v19.0, 1819 строк)
+├── .github/
+│   └── workflows/
+│       ├── check.yml           # ShellCheck + bash syntax
+│       └── security.yml        # Security Scan (секреты, permissions)
+├── assets/
+│   └── panel_preview.svg       # SVG-превью панели
+├── docs/
+│   └── README.md               # Документация проекта
+├── examples/
+│   ├── README.md               # Описание примеров
+│   ├── bot.env.example         # Пример .env бота
+│   ├── cabinet.env.example     # Пример .env кабинета
+│   └── Caddyfile.example       # Пример Caddyfile
+├── CHANGELOG.md                # История изменений (v16-v19)
+├── CONTRIBUTING.md             # Это руководство
+├── LICENSE                     # MIT лицензия
+├── README.md                   # Главный README
+├── RELEASE_NOTES.md            # Заметки о текущем релизе
+└── SECURITY.md                 # Политика безопасности
 ```
 
 ## Лицензия
