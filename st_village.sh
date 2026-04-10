@@ -387,6 +387,296 @@ ensure_dependencies() {
     docker info >/dev/null 2>&1 || die "Docker установлен, но демон Docker недоступен."
 }
 
+# === DOCKER PULL HELPERS ===
+
+docker_pull_with_retry() {
+    local image="$1"
+    local max_retries="${2:-3}"
+    local delay="${3:-15}"
+    local attempt=1
+
+    while [[ $attempt -le $max_retries ]]; do
+        log "Pull ${image} (попытка ${attempt}/${max_retries})..."
+        if docker pull "$image" 2>&1; then
+            ok "Образ ${image} загружен."
+            return 0
+        fi
+        local pull_err="$?"
+        if [[ $attempt -lt $max_retries ]]; then
+            warn "Не удалось загрузить ${image}. Жду ${delay}с перед повтором..."
+            sleep "$delay"
+            delay=$((delay * 2))
+        fi
+        attempt=$((attempt + 1))
+    done
+
+    err "Не удалось загрузить ${image} после ${max_retries} попыток."
+    return 1
+}
+
+_extract_base_images_from_dockerfile() {
+    local dockerfile="$1"
+    [[ -f "$dockerfile" ]] || return 0
+    grep -iE '^\s*FROM\s+' "$dockerfile" 2>/dev/null \
+        | sed 's/#.*//;s/\s*AS\s.*//i' \
+        | awk '{print $2}' \
+        | grep -vE '^\$|^scratch$' \
+        | sort -u || true
+}
+
+_extract_compose_images() {
+    local compose_file="$1"
+    [[ -f "$compose_file" ]] || return 0
+    grep -E '^\s+image:\s*' "$compose_file" 2>/dev/null \
+        | awk '{print $2}' \
+        | tr -d '"' "'" \
+        | sort -u || true
+}
+
+pre_pull_images() {
+    local component="${1:-all}"
+    local images=() img=""
+    local failed=0
+
+    log "Предварительная загрузка Docker-образов (обход rate-limit)..."
+
+    # Collect base images from Dockerfiles
+    if [[ "$component" == "all" || "$component" == "bot" ]]; then
+        for df in "${BOT_DIR}/Dockerfile" "${BOT_DIR}/Dockerfile.local"; do
+            while IFS= read -r img; do
+                [[ -n "$img" ]] && images+=("$img")
+            done < <(_extract_base_images_from_dockerfile "$df")
+        done
+        while IFS= read -r img; do
+            [[ -n "$img" ]] && images+=("$img")
+        done < <(_extract_compose_images "$BOT_COMPOSE_FILE")
+    fi
+
+    if [[ "$component" == "all" || "$component" == "cabinet" ]]; then
+        for df in "${CABINET_DIR}/Dockerfile" "${CABINET_DIR}/Dockerfile.local"; do
+            while IFS= read -r img; do
+                [[ -n "$img" ]] && images+=("$img")
+            done < <(_extract_base_images_from_dockerfile "$df")
+        done
+        while IFS= read -r img; do
+            [[ -n "$img" ]] && images+=("$img")
+        done < <(_extract_compose_images "$CABINET_COMPOSE_FILE")
+    fi
+
+    if [[ "$component" == "all" || "$component" == "caddy" ]]; then
+        while IFS= read -r img; do
+            [[ -n "$img" ]] && images+=("$img")
+        done < <(_extract_compose_images "$CADDY_COMPOSE_FILE")
+    fi
+
+    # Deduplicate
+    local unique_images=()
+    local seen=""
+    for img in "${images[@]+${images[@]}}"; do
+        if [[ ":$seen:" != *":$img:"* ]]; then
+            unique_images+=("$img")
+            seen="${seen}:${img}"
+        fi
+    done
+
+    if [[ ${#unique_images[@]} -eq 0 ]]; then
+        warn "Не найдено образов для предварительной загрузки."
+        return 0
+    fi
+
+    echo -e "${BOLD}Найдено образов: ${#unique_images[@]}${NC}"
+    for img in "${unique_images[@]}"; do
+        echo -e "  ${CYAN}•${NC} ${img}"
+    done
+    echo
+
+    for img in "${unique_images[@]}"; do
+        docker_pull_with_retry "$img" 3 15 || {
+            err "Не удалось загрузить ${img}."
+            failed=$((failed + 1))
+        }
+    done
+
+    if [[ $failed -gt 0 ]]; then
+        warn "Не удалось загрузить ${failed} образ(ов). Сборка может завершиться ошибкой."
+        warn "Рекомендации:"
+        echo -e "  ${YELLOW}1.${NC} Подождите 1-2 минуты и повторите"
+        echo -e "  ${YELLOW}2.${NC} Войдите в Docker Hub: ${CYAN}Система и безопасность → 🐳 Docker Hub${NC}"
+        echo -e "  ${YELLOW}3.${NC} Настройте зеркало: ${CYAN}Система и безопасность → 🐳 Docker Hub${NC}"
+        return 1
+    fi
+
+    ok "Все образы загружены."
+    return 0
+}
+
+setup_docker_mirror() {
+    echo -e "\n${CYAN}========================================${NC}"
+    echo -e "${BOLD}🪞 НАСТРОЙКА ЗЕРКАЛА DOCKER HUB${NC}"
+    echo -e "${CYAN}========================================${NC}"
+
+    local daemon_json="/etc/docker/daemon.json"
+    local current_mirrors=""
+    if [[ -f "$daemon_json" ]]; then
+        current_mirrors="$(grep -oP '"registry-mirrors"\s*:\s*\[\K[^]]*' "$daemon_json" 2>/dev/null | tr -d '"' | tr ',' '\n' || true)"
+    fi
+
+    echo -e "\n${BOLD}Текущие зеркала:${NC}"
+    if [[ -n "$current_mirrors" ]]; then
+        echo "$current_mirrors" | while IFS= read -r m; do
+            [[ -n "$m" ]] && echo -e "  ${GREEN}•${NC} $(echo "$m" | xargs)"
+        done
+    else
+        echo -e "  ${YELLOW}Не настроены${NC}"
+    fi
+
+    echo -e "\n${BOLD}Популярные зеркала:${NC}"
+    echo -e "  ${GREEN}1.${NC} https://mirror.gcr.io"
+    echo -e "  ${GREEN}2.${NC} https://dockerhub.timeweb.cloud"
+    echo -e "  ${GREEN}3.${NC} https://huecker.io"
+    echo -e "  ${YELLOW}4.${NC} Ввести свой URL"
+    echo -e "  ${RED}5.${NC} Удалить все зеркала"
+    echo -e "  ${RED}0.${NC} Назад"
+
+    local choice; _menu_choice choice
+    local mirror_url=""
+    case "$choice" in
+        1) mirror_url="https://mirror.gcr.io" ;;
+        2) mirror_url="https://dockerhub.timeweb.cloud" ;;
+        3) mirror_url="https://huecker.io" ;;
+        4)
+            read_tty mirror_url "  ${YELLOW}URL зеркала (https://...): ${NC}"
+            [[ -n "$mirror_url" ]] || { warn "URL не указан."; pause; return 0; }
+            ;;
+        5)
+            if [[ -f "$daemon_json" ]]; then
+                # Remove registry-mirrors from daemon.json using python/sed
+                local tmp_json=""
+                tmp_json="$(python3 -c "
+import json, sys
+try:
+    with open('$daemon_json') as f: d = json.load(f)
+    d.pop('registry-mirrors', None)
+    json.dump(d, sys.stdout, indent=2)
+except: sys.exit(1)
+" 2>/dev/null || true)"
+                if [[ -n "$tmp_json" ]]; then
+                    echo "$tmp_json" > "$daemon_json"
+                    systemctl restart docker >/dev/null 2>&1 || true
+                    ok "Зеркала удалены. Docker перезапущен."
+                else
+                    warn "Не удалось обработать daemon.json."
+                fi
+            else
+                warn "Файл daemon.json не существует."
+            fi
+            pause; return 0
+            ;;
+        0) return 0 ;;
+        *) warn "Неизвестная команда."; sleep 1; return 0 ;;
+    esac
+
+    if [[ -n "$mirror_url" ]]; then
+        mkdir -p /etc/docker
+        local new_json=""
+        if [[ -f "$daemon_json" ]]; then
+            new_json="$(python3 -c "
+import json, sys
+try:
+    with open('$daemon_json') as f: d = json.load(f)
+except: d = {}
+mirrors = d.get('registry-mirrors', [])
+if '$mirror_url' not in mirrors:
+    mirrors.insert(0, '$mirror_url')
+d['registry-mirrors'] = mirrors
+json.dump(d, sys.stdout, indent=2)
+" 2>/dev/null || true)"
+        fi
+        if [[ -z "$new_json" ]]; then
+            new_json="$(printf '{\n  "registry-mirrors": ["%s"]\n}' "$mirror_url")"
+        fi
+        echo "$new_json" > "$daemon_json"
+        systemctl restart docker >/dev/null 2>&1 || { err "Не удалось перезапустить Docker."; pause; return 1; }
+        ok "Зеркало ${mirror_url} добавлено. Docker перезапущен."
+    fi
+    pause
+}
+
+docker_hub_login() {
+    echo -e "\n${CYAN}========================================${NC}"
+    echo -e "${BOLD}🔑 ВХОД В DOCKER HUB${NC}"
+    echo -e "${CYAN}========================================${NC}"
+    echo -e "${YELLOW}Авторизация повышает лимит pull (200/6ч вместо 100/6ч).${NC}"
+    echo -e "${YELLOW}Бесплатный аккаунт: https://hub.docker.com${NC}\n"
+
+    local logged_in=""
+    logged_in="$(docker info 2>/dev/null | grep -i 'Username:' | awk '{print $2}' || true)"
+    if [[ -n "$logged_in" ]]; then
+        echo -e "Текущий пользователь: ${GREEN}${logged_in}${NC}\n"
+        echo -e "  ${GREEN}1.${NC} Войти под другим аккаунтом"
+        echo -e "  ${RED}2.${NC} Выйти (docker logout)"
+        echo -e "  ${RED}0.${NC} Назад"
+        local ch; _menu_choice ch
+        case "$ch" in
+            1) docker logout >/dev/null 2>&1 || true ;;
+            2) docker logout >/dev/null 2>&1 && ok "Выход выполнен." || warn "Не удалось выполнить logout."; pause; return 0 ;;
+            0|*) return 0 ;;
+        esac
+    fi
+
+    local username="" password=""
+    read_tty username "  ${GREEN}Docker Hub username: ${NC}"
+    [[ -n "$username" ]] || { warn "Username не указан."; pause; return 0; }
+
+    printf "%b" "  ${GREEN}Docker Hub password/token: ${NC}" >&4
+    IFS= read -rs password <&3 || password=""
+    echo >&4
+    [[ -n "$password" ]] || { warn "Пароль не указан."; pause; return 0; }
+
+    echo "$password" | docker login -u "$username" --password-stdin 2>&1 && {
+        ok "Вход выполнен: ${username}"
+    } || {
+        err "Не удалось войти. Проверьте логин/пароль."
+    }
+    password=""
+    pause
+}
+
+docker_hub_menu() {
+    while true; do
+        _menu_header "🐳 DOCKER HUB"
+
+        local logged_in=""
+        logged_in="$(docker info 2>/dev/null | grep -i 'Username:' | awk '{print $2}' || true)"
+        if [[ -n "$logged_in" ]]; then
+            echo -e "Авторизация: ${GREEN}${logged_in}${NC}"
+        else
+            echo -e "Авторизация: ${RED}Нет (анонимный режим, лимит 100 pull/6ч)${NC}"
+        fi
+
+        local daemon_json="/etc/docker/daemon.json"
+        local has_mirrors="${RED}Нет${NC}"
+        if [[ -f "$daemon_json" ]] && grep -q 'registry-mirrors' "$daemon_json" 2>/dev/null; then
+            has_mirrors="${GREEN}Настроены${NC}"
+        fi
+        echo -e "Зеркала:     ${has_mirrors}\n"
+
+        echo -e "${GREEN}1.${NC} 🔑 Войти в Docker Hub"
+        echo -e "${BLUE}2.${NC} 🪞 Настроить зеркало Docker Hub"
+        echo -e "${YELLOW}3.${NC} 📥 Тест: загрузить образы проекта сейчас"
+        echo -e "${RED}0.${NC} ⬅️ Назад"
+
+        local choice; _menu_choice choice
+        case "$choice" in
+            1) docker_hub_login ;;
+            2) setup_docker_mirror ;;
+            3) pre_pull_images "all"; pause ;;
+            0) return ;;
+            *) warn "Неизвестная команда."; sleep 1 ;;
+        esac
+    done
+}
+
 # === FILE GENERATION ===
 
 write_cabinet_override() {
@@ -969,6 +1259,12 @@ start_project() {
     check_ports
     echo
 
+    pre_pull_images "all" || {
+        if ! confirm "Не удалось загрузить все образы. Попробовать сборку всё равно?"; then
+            return 1
+        fi
+    }
+
     log "Запускаю Bedolaga Bot..."
     dc_bot up -d --build || { err "Не удалось запустить Bot."; pause; return 1; }
     ensure_bot_network || { err "После запуска бота сеть remnawave-network не появилась."; pause; return 1; }
@@ -1011,6 +1307,7 @@ restart_component() {
 
 rebuild_component() {
     local component="$1"
+    pre_pull_images "$component" || warn "Не удалось предзагрузить образы, пробую сборку..."
     case "$component" in
         bot) dc_bot up -d --build ;;
         cabinet) write_cabinet_override; dc_cabinet up -d --build ;;
@@ -1570,8 +1867,9 @@ system_security_menu() {
         echo -e "${BLUE}[Обслуживание]${NC}"
         echo -e "${PURPLE}13.${NC} 💿 Управление Swap"
         echo -e "${PURPLE}14.${NC} 🧹 Очистить Docker от мусора"
-        echo -e "${PURPLE}15.${NC} 🚚 Миграция"
-        echo -e "${RED}16.${NC} 🗑  Полное удаление проекта"
+        echo -e "${PURPLE}15.${NC} � Docker Hub (логин/зеркала)"
+        echo -e "${PURPLE}16.${NC} 🚚 Миграция"
+        echo -e "${RED}17.${NC} 🗑  Полное удаление проекта"
         echo -e "${RED}0.${NC}  ⬅️ Назад"
 
         local sys_choice; _menu_choice sys_choice
@@ -1627,8 +1925,9 @@ system_security_menu() {
                 fi
                 pause
                 ;;
-            15) migration_menu ;;
-            16) full_uninstall ;;
+            15) docker_hub_menu ;;
+            16) migration_menu ;;
+            17) full_uninstall ;;
             0) return ;;
             *) warn "Неизвестная команда."; sleep 1 ;;
         esac
