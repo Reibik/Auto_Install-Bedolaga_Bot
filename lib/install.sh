@@ -13,20 +13,20 @@ install_stack() {
 
   ui_progress 1 7 'Проверка сервера'
   preflight
-  ui_step done 'Сервер готов к установке'
+  ui_step 'done' 'Сервер готов к установке'
 
   ui_progress 2 7 'Загрузка компонентов'
   prepare_sources
-  ui_step done 'Исходный код Bot и Cabinet подготовлен'
+  ui_step 'done' 'Исходный код Bot и Cabinet подготовлен'
 
   ui_progress 3 7 'Подготовка конфигурации'
   initialize_env_files
   copy_compose_template
-  ui_step done 'Шаблоны и конфигурационные файлы готовы'
+  ui_step 'done' 'Шаблоны и конфигурационные файлы готовы'
 
   ui_progress 4 7 'Интерактивная настройка'
   configuration_wizard
-  ui_step done 'Конфигурация сохранена и проверена'
+  ui_step 'done' 'Конфигурация сохранена и проверена'
 
   local dns_ok=1
   ui_progress 5 7 'Проверка DNS'
@@ -39,18 +39,18 @@ install_stack() {
       return 0
     }
   fi
-  ui_step done 'Проверка DNS завершена'
+  ui_step 'done' 'Проверка DNS завершена'
 
   ui_progress 6 7 'Сборка и запуск сервисов'
   validate_configuration || die "Сгенерированная конфигурация некорректна."
   compose_up_or_diagnose -d --build --remove-orphans || return 1
-  ui_step done 'Docker-сервисы созданы и запущены'
+  ui_step 'done' 'Docker-сервисы созданы и запущены'
 
   ui_progress 7 7 'Проверка работоспособности'
   if wait_for_health 300; then
     local bot_username backup_status='Включены'
     bot_username="$(dotenv_get "$BOT_ENV" BOT_USERNAME 2>/dev/null || printf 'не определён')"
-    ui_step done 'Все сервисы прошли health checks'
+    ui_step 'done' 'Все сервисы прошли health checks'
     if ! backup_schedule enable; then
       backup_status='Не включены'
       warn "Не удалось включить ежедневный бэкап. Это можно сделать: bedolaga schedule enable"
