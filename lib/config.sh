@@ -56,6 +56,9 @@ prompt_value() {
       warn "Некорректное значение. Попробуйте ещё раз."
       continue
     fi
+    if [[ "$secret" -eq 1 ]]; then
+      printf '%b\n' "${C_GREEN}[✓]${C_RESET} Секретное значение принято." >/dev/tty
+    fi
     printf -v "$variable_name" '%s' "$value"
     return 0
   done
