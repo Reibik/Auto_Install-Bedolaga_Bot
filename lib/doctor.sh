@@ -28,7 +28,7 @@ check_telegram_webhook() {
   [[ -n "${WEBHOOK_DOMAIN:-}" && -f "$BOT_ENV" ]] || return 1
   token="$(dotenv_get "$BOT_ENV" BOT_TOKEN)"
   expected="https://${WEBHOOK_DOMAIN}/webhook"
-  actual="$(curl -fsS --max-time 10 "https://api.telegram.org/bot${token}/getWebhookInfo" 2>/dev/null | jq -r '.result.url // empty')"
+  actual="$(telegram_api_request "$token" getWebhookInfo 2>/dev/null | jq -r '.result.url // empty')"
   [[ "$actual" == "$expected" ]]
 }
 

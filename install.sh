@@ -52,6 +52,10 @@ tar -xzf "$archive" -C "$temporary_root"
 source_root="$(find "$temporary_root" -mindepth 1 -maxdepth 1 -type d -print -quit)"
 [[ -x "$source_root/bedolaga" || -f "$source_root/bedolaga" ]] || { printf 'В архиве отсутствует bedolaga.\n' >&2; exit 1; }
 [[ -f "$source_root/lib/common.sh" && -f "$source_root/lib/ui.sh" && -f "$source_root/templates/compose.yaml" ]] || { printf 'Архив Manager неполный.\n' >&2; exit 1; }
+if ! bash -n "$source_root/bedolaga" "$source_root/install.sh" "$source_root"/lib/*.sh; then
+  printf 'Архив Manager содержит синтаксически некорректные скрипты.\n' >&2
+  exit 1
+fi
 
 staging="/usr/local/lib/.bedolaga-manager.new.$$"
 previous="/usr/local/lib/bedolaga-manager.previous"
@@ -69,7 +73,16 @@ if ! mv "$staging" "$MANAGER_HOME"; then
   printf 'Не удалось установить Manager. Предыдущая версия восстановлена.\n' >&2
   exit 1
 fi
-ln -sfn "$MANAGER_HOME/bedolaga" "$COMMAND_PATH"
+if ! "$MANAGER_HOME/bedolaga" version >/dev/null 2>&1 || ! ln -sfn "$MANAGER_HOME/bedolaga" "$COMMAND_PATH"; then
+  rm -rf -- "$MANAGER_HOME"
+  if [[ -d "$previous" ]]; then
+    mv "$previous" "$MANAGER_HOME"
+  else
+    rm -f -- "$COMMAND_PATH"
+  fi
+  printf 'Новая версия Manager не прошла проверку запуска. Предыдущая версия восстановлена.\n' >&2
+  exit 1
+fi
 
 printf 'Bedolaga Manager установлен: %s\n' "$COMMAND_PATH"
 if [[ "${BEDOLAGA_NO_WIZARD:-0}" != 1 && "$RUN_WIZARD" -eq 1 ]]; then

@@ -11,7 +11,7 @@ jobs:
   shell:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install checks
         run: sudo apt-get update && sudo apt-get install -y shellcheck
       - name: Syntax
@@ -61,7 +61,7 @@ jobs:
     steps:
       - name: Install test dependencies
         run: apt-get update && apt-get install -y git ca-certificates
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Platform contract
         run: bash tests/platform.sh
       - name: Portable tests

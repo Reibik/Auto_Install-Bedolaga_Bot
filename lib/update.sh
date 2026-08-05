@@ -36,6 +36,20 @@ checkout_commit() {
   git -C "$directory" checkout --quiet --detach "$commit"
 }
 
+restore_previous_components() {
+  local bot_commit="$1"
+  local cabinet_commit="$2"
+  local backup="$3"
+  checkout_commit "$BOT_SOURCE_DIR" "$bot_commit"
+  checkout_commit "$CABINET_SOURCE_DIR" "$cabinet_commit"
+  if compose up -d --build --remove-orphans && wait_for_health 300; then
+    warn "Предыдущая версия приложений восстановлена. Бэкап: $backup"
+    return 0
+  fi
+  warn "Автооткат не восстановил здоровье сервисов. Используйте бэкап: $backup"
+  return 1
+}
+
 update_components() {
   require_root
   local component="${1:-all}"
@@ -79,17 +93,18 @@ update_components() {
     checkout_commit "$CABINET_SOURCE_DIR" "$cabinet_before"
     return 1
   fi
-  compose up -d --remove-orphans
+  if ! compose up -d --remove-orphans; then
+    error "Docker Compose не смог запустить обновлённые сервисы. Возвращаю предыдущую версию приложений."
+    restore_previous_components "$bot_before" "$cabinet_before" "$backup" || true
+    return 1
+  fi
   if wait_for_health 300; then
     success "Обновление установлено. Bot ${bot_before:0:8}→${bot_after:0:8}, Cabinet ${cabinet_before:0:8}→${cabinet_after:0:8}."
     return 0
   fi
 
   error "Health checks не пройдены. Автоматически возвращаю предыдущую версию приложения."
-  checkout_commit "$BOT_SOURCE_DIR" "$bot_before"
-  checkout_commit "$CABINET_SOURCE_DIR" "$cabinet_before"
-  compose up -d --build --remove-orphans
-  wait_for_health 300 || warn "Автооткат приложения не восстановил здоровье. Бэкап: $backup"
+  restore_previous_components "$bot_before" "$cabinet_before" "$backup" || true
   return 1
 }
 
@@ -117,7 +132,8 @@ self_update() {
   local installer
   installer="$(mktemp)"
   info "Загружаю актуальный Bedolaga Manager."
-  curl -fsSL "https://raw.githubusercontent.com/${BEDOLAGA_REPOSITORY}/main/install.sh" -o "$installer"
+  curl -fsSL --retry 3 --connect-timeout 15 \
+    "https://raw.githubusercontent.com/${BEDOLAGA_REPOSITORY}/main/install.sh" -o "$installer"
   grep -q '^#!/usr/bin/env bash' "$installer" || { rm -f "$installer"; die "Загружен некорректный install.sh"; }
   chmod 700 "$installer"
   BEDOLAGA_NO_WIZARD=1 bash "$installer"

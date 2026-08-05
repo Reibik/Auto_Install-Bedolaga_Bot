@@ -8,7 +8,9 @@ detect_ssh_port() {
   if [[ -z "$port" && -n "${SSH_CONNECTION:-}" ]]; then
     port="$(awk '{print $4}' <<<"$SSH_CONNECTION")"
   fi
-  [[ "$port" =~ ^[0-9]{1,5}$ ]] || port=22
+  if [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || ((10#$port < 1 || 10#$port > 65535)); then
+    port=22
+  fi
   printf '%s\n' "$port"
 }
 firewall_manage() {
@@ -25,16 +27,16 @@ firewall_manage() {
       fi
       ;;
     enable)
+      info "Будут разрешены SSH (${ssh_port}/tcp), HTTP (80/tcp), HTTPS (443/tcp) и HTTP/3 (443/udp)."
+      confirm "Установить правила и включить UFW?" || die "Отменено. Настройки UFW не изменены."
       apt-get update -y
       apt-get install -y ufw
-      info "Сначала разрешаю текущий SSH-порт $ssh_port, затем HTTP/HTTPS."
       ufw allow "${ssh_port}/tcp" comment 'SSH'
       ufw allow 80/tcp comment 'Bedolaga HTTP'
       ufw allow 443/tcp comment 'Bedolaga HTTPS'
       ufw allow 443/udp comment 'Bedolaga HTTP3'
-      ufw status numbered
-      confirm "Включить UFW с показанными правилами?" || die "Отменено. Правила добавлены, но UFW не включён."
       ufw --force enable
+      ufw status numbered
       success "UFW включён. SSH-порт $ssh_port разрешён."
       ;;
     disable)

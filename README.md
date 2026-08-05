@@ -120,6 +120,9 @@ NO_COLOR=1 BEDOLAGA_EMOJI=0 bedolaga
 | `bedolaga logs [service]` | Открыть логи сервиса |
 | `bedolaga doctor` | Проверить DNS, HTTPS, API и контейнеры |
 | `bedolaga config wizard` | Повторно запустить мастер настройки |
+| `bedolaga config bot` | Открыть конфигурацию Bot в редакторе |
+| `bedolaga config stack` | Открыть системные параметры Compose |
+| `bedolaga config paths` | Показать расположение всех файлов конфигурации |
 | `bedolaga apply` | Применить `.env`, Caddy и branding |
 | `bedolaga versions` | Сравнить локальные и доступные версии |
 | `bedolaga update [all\|bot\|cabinet]` | Обновить весь проект или компонент |

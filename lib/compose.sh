@@ -133,13 +133,24 @@ config_edit() {
     stack) file="$STACK_ENV" ;;
     caddy) file="$CADDY_FILE" ;;
     wizard) configuration_wizard; validate_configuration; return ;;
-    *) die "Использование: bedolaga config [bot|stack|caddy|wizard]" ;;
+    paths)
+      ui_banner 'Файлы конфигурации'
+      ui_key_value config 'Bot env' "$BOT_ENV"
+      ui_key_value config 'Stack env' "$STACK_ENV"
+      ui_key_value config 'Caddyfile' "$CADDY_FILE"
+      ui_hint 'Редактирование: bedolaga config <bot|stack|caddy>'
+      return
+      ;;
+    *) die "Использование: bedolaga config [bot|stack|caddy|wizard|paths]" ;;
   esac
   editor="${EDITOR:-nano}"
   command_exists "$editor" || editor="nano"
   "$editor" "$file"
   chmod 600 "$file"
-  [[ "$target" == stack ]] && render_caddyfile
+  if [[ "$target" == stack ]]; then
+    validate_stack_values || die "Некорректные значения в $STACK_ENV"
+    render_caddyfile
+  fi
   validate_configuration || die "После редактирования конфигурация некорректна. Исправьте файл: $file"
   success "Конфигурация корректна. Для применения выполните bedolaga apply."
 }

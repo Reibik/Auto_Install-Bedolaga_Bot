@@ -2,7 +2,14 @@
 
 backup_archive_name() {
   local kind="$1"
-  printf '%s/bedolaga_%s_%s.tar.gz\n' "$BACKUP_ROOT" "$kind" "$(date '+%Y%m%d_%H%M%S')"
+  local timestamp candidate counter=1
+  timestamp="$(date '+%Y%m%d_%H%M%S')"
+  candidate="$BACKUP_ROOT/bedolaga_${kind}_${timestamp}.tar.gz"
+  while [[ -e "$candidate" || -e "${candidate}.sha256" ]]; do
+    candidate="$BACKUP_ROOT/bedolaga_${kind}_${timestamp}_${counter}.tar.gz"
+    ((counter += 1))
+  done
+  printf '%s\n' "$candidate"
 }
 
 backup_create() {

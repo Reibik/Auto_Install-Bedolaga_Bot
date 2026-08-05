@@ -53,7 +53,7 @@ usage() {
   bedolaga apply                    Применить .env/Caddy/branding
   bedolaga logs [service]           Логи bot/cabinet/caddy/postgres/redis
   bedolaga doctor                   Диагностика DNS, HTTPS, API и контейнеров
-  bedolaga config [target]          bot, stack, caddy или wizard
+  bedolaga config [target]          bot, stack, caddy, wizard или paths
   bedolaga versions                 Сравнить текущие и доступные commit
   bedolaga update [component]       all, bot или cabinet
   bedolaga rollback                 Откат последнего обновления приложений

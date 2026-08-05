@@ -16,6 +16,10 @@ source "$PROJECT_ROOT/lib/common.sh"
 source "$PROJECT_ROOT/lib/env.sh"
 # shellcheck disable=SC1091
 source "$PROJECT_ROOT/lib/config.sh"
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/lib/security.sh"
+# shellcheck disable=SC1091
+source "$PROJECT_ROOT/lib/backup.sh"
 
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 assert_equal() { [[ "$1" == "$2" ]] || fail "expected '$2', got '$1'"; }
@@ -40,6 +44,12 @@ dotenv_merge_missing "$STACK_ENV" "$defaults"
 assert_equal "$(dotenv_get "$STACK_ENV" SIMPLE)" "value"
 assert_equal "$(dotenv_get "$STACK_ENV" NEW_DEFAULT)" "added"
 
+no_newline="$TEST_ROOT/no-newline.env"
+printf 'EXISTING=value' >"$no_newline"
+dotenv_merge_missing "$no_newline" "$defaults"
+assert_equal "$(dotenv_get "$no_newline" EXISTING)" "value"
+assert_equal "$(dotenv_get "$no_newline" NEW_DEFAULT)" "added"
+
 dotenv_set "$BOT_ENV" ADMIN_REPORTS_TOPIC_ID '# ID топика для отчетов'
 dotenv_set "$BOT_ENV" MULENPAY_SHOP_ID '<ID магазина>'
 dotenv_set "$BOT_ENV" FREEKASSA_SHOP_ID ''
@@ -62,18 +72,64 @@ validate_api_key "abcDEF_123.456-xyz" || fail "valid API key rejected"
 # shellcheck disable=SC2016
 ! validate_api_key '$(unsafe)' || fail "unsafe API key accepted"
 validate_app_name "My VPN" || fail "valid app name rejected"
+if [[ -f /usr/share/zoneinfo/UTC ]]; then
+  validate_timezone "UTC" || fail "UTC timezone rejected"
+fi
 # shellcheck disable=SC2016
 ! validate_app_name '$(touch /tmp/unsafe)' || fail "unsafe app name accepted"
+
+curl_args="$TEST_ROOT/curl-args"
+curl_config="$TEST_ROOT/curl-config"
+curl() {
+  printf '%s\n' "$*" >"$curl_args"
+  cat >"$curl_config"
+  printf '%s\n' '{"ok":true,"result":{"username":"test_bot"}}'
+}
+telegram_response="$(telegram_api_request '1234567:abcdefghijklmnopqrstuvwxyz_123456' getMe)"
+[[ "$telegram_response" == *'"username":"test_bot"'* ]] || fail "Telegram API response was lost"
+! grep -q '1234567:' "$curl_args" || fail "Telegram token leaked into curl arguments"
+grep -q '1234567:' "$curl_config" || fail "Telegram request URL was not passed through curl config"
 safe_realpath_under "$DATA_ROOT/backups/test.tar.gz" "$DATA_ROOT" || fail "safe child rejected"
 ! safe_realpath_under "/etc/passwd" "$DATA_ROOT" || fail "unsafe path accepted"
+
+command_exists() {
+  [[ "$1" != sshd ]] && command -v "$1" >/dev/null 2>&1
+}
+SSH_CONNECTION='192.0.2.1 50000 192.0.2.2 2222'
+assert_equal "$(detect_ssh_port)" '2222'
+SSH_CONNECTION='192.0.2.1 50000 192.0.2.2 70000'
+assert_equal "$(detect_ssh_port)" '22'
+unset SSH_CONNECTION
+
+first_backup="$(backup_archive_name manual)"
+touch "$first_backup"
+second_backup="$(backup_archive_name manual)"
+[[ "$first_backup" != "$second_backup" ]] || fail "backup name collision was not avoided"
 
 dotenv_set "$STACK_ENV" ACME_EMAIL "admin@example.com"
 dotenv_set "$STACK_ENV" WEBHOOK_DOMAIN "hooks.example.com"
 dotenv_set "$STACK_ENV" CABINET_DOMAIN "cabinet.example.com"
+dotenv_set "$STACK_ENV" VITE_TELEGRAM_BOT_USERNAME "test_bot"
 render_caddyfile
 grep -q 'hooks.example.com' "$CADDY_FILE" || fail "webhook domain not rendered"
 grep -q 'cabinet.example.com' "$CADDY_FILE" || fail "cabinet domain not rendered"
 ! grep -q '@@' "$CADDY_FILE" || fail "template placeholder remains"
+validate_stack_values || fail "valid stack values rejected"
+dotenv_set "$STACK_ENV" CABINET_DOMAIN "hooks.example.com"
+if validate_stack_values >/dev/null 2>&1; then
+  fail "identical webhook and Cabinet domains accepted"
+fi
+dotenv_set "$STACK_ENV" CABINET_DOMAIN "cabinet.example.com"
+
+dotenv_set "$BOT_ENV" BOT_TOKEN "1234567:abcdefghijklmnopqrstuvwxyz_123456"
+dotenv_set "$BOT_ENV" ADMIN_IDS "123,456"
+dotenv_set "$BOT_ENV" REMNAWAVE_API_URL "https://panel.example.com"
+dotenv_set "$BOT_ENV" REMNAWAVE_API_KEY "abcDEF_123.456-xyz"
+validate_bot_values || fail "valid Bot values rejected"
+dotenv_set "$BOT_ENV" ADMIN_IDS "123,unsafe"
+if validate_bot_values >/dev/null 2>&1; then
+  fail "invalid ADMIN_IDS accepted"
+fi
 
 # Проверяем передачу введённого значения из функций чтения в переменную вызывающего кода.
 # util-linux script создаёт настоящий псевдотерминал, включая скрытый режим read -s.

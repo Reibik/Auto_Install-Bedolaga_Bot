@@ -102,9 +102,19 @@ EOF
   done
 }
 
+telegram_api_request() {
+  local token="$1"
+  local method="$2"
+  validate_bot_token "$token" || return 1
+  [[ "$method" =~ ^[A-Za-z][A-Za-z0-9]*$ ]] || return 1
+  # Передаём URL через stdin-конфиг curl: Bot Token не появляется в argv и ps.
+  printf 'url = "https://api.telegram.org/bot%s/%s"\n' "$token" "$method" |
+    curl -fsS --max-time 10 --config -
+}
+
 telegram_bot_username() {
   local token="$1"
-  curl -fsS --max-time 10 "https://api.telegram.org/bot${token}/getMe" 2>/dev/null |
+  telegram_api_request "$token" getMe 2>/dev/null |
     jq -r 'if .ok == true then .result.username else empty end' 2>/dev/null || true
 }
 
@@ -336,7 +346,31 @@ validate_app_name() {
     *) return 0 ;;
   esac
 }
-validate_timezone() { [[ "$1" =~ ^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)+$ && -f "/usr/share/zoneinfo/$1" ]]; }
+validate_timezone() { [[ "$1" =~ ^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$ && -f "/usr/share/zoneinfo/$1" ]]; }
+
+validate_stack_values() {
+  load_stack_env || { error "Не удалось загрузить $STACK_ENV"; return 1; }
+  validate_domain "${WEBHOOK_DOMAIN:-}" || { error "Некорректный WEBHOOK_DOMAIN."; return 1; }
+  validate_domain "${CABINET_DOMAIN:-}" || { error "Некорректный CABINET_DOMAIN."; return 1; }
+  [[ "$WEBHOOK_DOMAIN" != "$CABINET_DOMAIN" ]] || { error "Webhook и Cabinet должны использовать разные домены."; return 1; }
+  validate_email "${ACME_EMAIL:-}" || { error "Некорректный ACME_EMAIL."; return 1; }
+  validate_username "${VITE_TELEGRAM_BOT_USERNAME:-}" || { error "Некорректный VITE_TELEGRAM_BOT_USERNAME."; return 1; }
+  [[ -z "${VITE_APP_NAME:-}" ]] || validate_app_name "$VITE_APP_NAME" || { error "Некорректный VITE_APP_NAME."; return 1; }
+  [[ -z "${VITE_APP_LOGO:-}" ]] || validate_logo "$VITE_APP_LOGO" || { error "Некорректный VITE_APP_LOGO."; return 1; }
+  [[ -z "${TZ:-}" ]] || validate_timezone "$TZ" || { error "Некорректный TZ."; return 1; }
+}
+
+validate_bot_values() {
+  local token admin_ids remnawave_url remnawave_key
+  token="$(dotenv_get "$BOT_ENV" BOT_TOKEN 2>/dev/null || true)"
+  admin_ids="$(dotenv_get "$BOT_ENV" ADMIN_IDS 2>/dev/null || true)"
+  remnawave_url="$(dotenv_get "$BOT_ENV" REMNAWAVE_API_URL 2>/dev/null || true)"
+  remnawave_key="$(dotenv_get "$BOT_ENV" REMNAWAVE_API_KEY 2>/dev/null || true)"
+  validate_bot_token "$token" || { error "Некорректный BOT_TOKEN."; return 1; }
+  validate_admin_ids "$admin_ids" || { error "Некорректный ADMIN_IDS."; return 1; }
+  validate_https_url "$remnawave_url" || { error "Некорректный REMNAWAVE_API_URL."; return 1; }
+  validate_api_key "$remnawave_key" || { error "Некорректный REMNAWAVE_API_KEY."; return 1; }
+}
 
 validate_managed_paths() {
   local configured_bot configured_cabinet configured_config configured_data configured_bot_env configured_db configured_user
@@ -361,6 +395,8 @@ validate_configuration() {
     VITE_TELEGRAM_BOT_USERNAME WEBHOOK_DOMAIN CABINET_DOMAIN ACME_EMAIL || return 1
   dotenv_require "$BOT_ENV" BOT_TOKEN ADMIN_IDS WEBHOOK_URL WEBHOOK_SECRET_TOKEN WEB_API_DEFAULT_TOKEN \
     REMNAWAVE_API_URL REMNAWAVE_API_KEY CABINET_JWT_SECRET || return 1
+  validate_stack_values || return 1
+  validate_bot_values || return 1
   validate_managed_paths || return 1
   docker compose --project-name bedolaga --env-file "$STACK_ENV" -f "$COMPOSE_FILE" config --quiet
 }

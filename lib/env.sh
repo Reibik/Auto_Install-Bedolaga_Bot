@@ -86,6 +86,11 @@ dotenv_merge_missing() {
   local target="$1"
   local defaults="$2"
   [[ -f "$defaults" ]] || return 0
+  # Редакторы и сторонние генераторы могут сохранить .env без завершающего LF.
+  # Перед добавлением первой новой переменной отделяем её от последней строки.
+  if [[ -s "$target" && -n "$(tail -c 1 "$target")" ]]; then
+    printf '\n' >>"$target"
+  fi
   local line key
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" =~ ^[A-Z][A-Z0-9_]*= ]] || continue
