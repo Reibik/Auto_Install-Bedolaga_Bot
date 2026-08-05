@@ -1,0 +1,155 @@
+name: bedolaga
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+x-labels: &managed-labels
+  dev.reibik.bedolaga.managed: "true"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
+      TZ: ${TZ:-Europe/Moscow}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging: *default-logging
+    labels: *managed-labels
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+    labels: *managed-labels
+
+  bot:
+    build:
+      context: ${BOT_SOURCE_DIR}
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ${BOT_ENV}
+    environment:
+      DOCKER_ENV: "true"
+      DATABASE_MODE: auto
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_URL: redis://redis:6379/0
+      TZ: ${TZ:-Europe/Moscow}
+      LOCALES_PATH: /app/locales
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ${DATA_ROOT}/bot/logs:/app/logs:rw
+      - ${DATA_ROOT}/bot/data:/app/data:rw
+      - ${DATA_ROOT}/bot/uploads:/app/uploads:rw
+      - ${DATA_ROOT}/bot/locales:/app/locales:rw
+      - ${DATA_ROOT}/bot/vpn_logo.png:/app/vpn_logo.png:ro
+    networks:
+      - backend
+      - edge
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:8080/health',headers={'X-API-Key':os.getenv('WEB_API_DEFAULT_TOKEN','')}); urllib.request.urlopen(r,timeout=5)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging: *default-logging
+    labels: *managed-labels
+
+  cabinet:
+    build:
+      context: ${CABINET_SOURCE_DIR}
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_TELEGRAM_BOT_USERNAME: ${VITE_TELEGRAM_BOT_USERNAME}
+        VITE_APP_NAME: ${VITE_APP_NAME:-VPN Cabinet}
+        VITE_APP_LOGO: ${VITE_APP_LOGO:-V}
+    restart: unless-stopped
+    networks:
+      - edge
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:80/"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging: *default-logging
+    labels: *managed-labels
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      bot:
+        condition: service_healthy
+      cabinet:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ${CONFIG_ROOT}/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
+    labels: *managed-labels
+
+networks:
+  backend:
+    internal: true
+    labels: *managed-labels
+  edge:
+    labels: *managed-labels
+
+volumes:
+  postgres_data:
+    labels: *managed-labels
+  redis_data:
+    labels: *managed-labels
+  caddy_data:
+    labels: *managed-labels
+  caddy_config:
+    labels: *managed-labels

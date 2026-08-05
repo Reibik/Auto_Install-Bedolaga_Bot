@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify version
+        run: |
+          expected="${GITHUB_REF_NAME#v}"
+          actual="$(sed -n 's/^readonly BEDOLAGA_VERSION="\([^"]*\)"/\1/p' lib/common.sh)"
+          test "$actual" = "$expected"
+      - name: Tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          bash -n bedolaga install.sh tests/*.sh lib/*.sh
+          shellcheck -x bedolaga install.sh tests/*.sh lib/*.sh
+          bash tests/smoke.sh
+          bash tests/lifecycle.sh
+      - name: Build release bundle
+        run: |
+          mkdir dist
+          bundle="bedolaga-manager-${GITHUB_REF_NAME}"
+          mkdir "dist/$bundle"
+          git archive HEAD | tar -x -C "dist/$bundle"
+          tar -C dist -czf "dist/${bundle}.tar.gz" "$bundle"
+          rm -rf "dist/$bundle"
+          cd dist
+          sha256sum "bedolaga-manager-${GITHUB_REF_NAME}.tar.gz" > "bedolaga-manager-${GITHUB_REF_NAME}.tar.gz.sha256"
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes

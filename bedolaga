@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+resolve_library_root() {
+  local source_path="${BASH_SOURCE[0]}"
+  while [[ -L "$source_path" ]]; do
+    local source_dir
+    source_dir="$(cd -P "$(dirname "$source_path")" >/dev/null 2>&1 && pwd)"
+    source_path="$(readlink "$source_path")"
+    [[ "$source_path" == /* ]] || source_path="$source_dir/$source_path"
+  done
+  cd -P "$(dirname "$source_path")" >/dev/null 2>&1 && pwd
+}
+
+BEDOLAGA_LIB_ROOT="$(resolve_library_root)"
+export BEDOLAGA_LIB_ROOT
+
+# shellcheck source=lib/common.sh
+source "$BEDOLAGA_LIB_ROOT/lib/common.sh"
+# shellcheck source=lib/env.sh
+source "$BEDOLAGA_LIB_ROOT/lib/env.sh"
+# shellcheck source=lib/system.sh
+source "$BEDOLAGA_LIB_ROOT/lib/system.sh"
+# shellcheck source=lib/config.sh
+source "$BEDOLAGA_LIB_ROOT/lib/config.sh"
+# shellcheck source=lib/compose.sh
+source "$BEDOLAGA_LIB_ROOT/lib/compose.sh"
+# shellcheck source=lib/backup.sh
+source "$BEDOLAGA_LIB_ROOT/lib/backup.sh"
+# shellcheck source=lib/update.sh
+source "$BEDOLAGA_LIB_ROOT/lib/update.sh"
+# shellcheck source=lib/doctor.sh
+source "$BEDOLAGA_LIB_ROOT/lib/doctor.sh"
+# shellcheck source=lib/security.sh
+source "$BEDOLAGA_LIB_ROOT/lib/security.sh"
+# shellcheck source=lib/install.sh
+source "$BEDOLAGA_LIB_ROOT/lib/install.sh"
+
+trap 'on_error "$LINENO"' ERR
+
+usage() {
+  cat <<'EOF'
+Bedolaga Manager — установка и управление Bedolaga Bot + Cabinet
+
+Использование:
+  bedolaga install                  Первичная установка / повторный мастер
+  bedolaga menu                     Интерактивное меню
+  bedolaga status                   Статус и версии контейнеров
+  bedolaga start|stop|restart       Управление стеком
+  bedolaga apply                    Применить .env/Caddy/branding
+  bedolaga logs [service]           Логи bot/cabinet/caddy/postgres/redis
+  bedolaga doctor                   Диагностика DNS, HTTPS, API и контейнеров
+  bedolaga config [target]          bot, stack, caddy или wizard
+  bedolaga versions                 Сравнить текущие и доступные commit
+  bedolaga update [component]       all, bot или cabinet
+  bedolaga rollback                 Откат последнего обновления приложений
+  bedolaga backup [--automatic]     Создать резервную копию
+  bedolaga backup-list              Показать резервные копии
+  bedolaga restore <archive>        Восстановить резервную копию
+  bedolaga schedule <action>        enable, disable или status
+  bedolaga firewall <action>        безопасная настройка UFW
+  bedolaga self-update              Обновить Manager
+  bedolaga uninstall [--purge-data] Удалить проект
+  bedolaga version                  Версия Manager
+EOF
+}
+
+menu() {
+  require_root
+  local choice=''
+  while true; do
+    clear
+    printf '%bBedolaga Manager %s%b\n\n' "$C_BOLD" "$BEDOLAGA_VERSION" "$C_RESET"
+    stack_status 2>/dev/null || true
+    cat <<'EOF'
+
+  1. Статус
+  2. Запустить
+  3. Остановить
+  4. Перезапустить
+  5. Проверить обновления
+  6. Обновить всё
+  7. Диагностика
+  8. Логи
+  9. Настройка
+ 10. Создать бэкап
+ 11. Показать бэкапы
+ 12. Откатить обновление
+  0. Выход
+EOF
+    read_tty choice "\n${C_CYAN}Выберите действие: ${C_RESET}"
+    case "$choice" in
+      1) bash "$BEDOLAGA_LIB_ROOT/bedolaga" status || true ;;
+      2) bash "$BEDOLAGA_LIB_ROOT/bedolaga" start || true ;;
+      3) bash "$BEDOLAGA_LIB_ROOT/bedolaga" stop || true ;;
+      4) bash "$BEDOLAGA_LIB_ROOT/bedolaga" restart || true ;;
+      5) bash "$BEDOLAGA_LIB_ROOT/bedolaga" versions || true ;;
+      6) bash "$BEDOLAGA_LIB_ROOT/bedolaga" update all || true ;;
+      7) bash "$BEDOLAGA_LIB_ROOT/bedolaga" doctor || true ;;
+      8) bash "$BEDOLAGA_LIB_ROOT/bedolaga" logs || true ;;
+      9)
+        if bash "$BEDOLAGA_LIB_ROOT/bedolaga" config wizard; then
+          if confirm "Применить новую конфигурацию сейчас?"; then
+            bash "$BEDOLAGA_LIB_ROOT/bedolaga" apply || true
+          fi
+        fi
+        ;;
+      10) bash "$BEDOLAGA_LIB_ROOT/bedolaga" backup || true ;;
+      11) bash "$BEDOLAGA_LIB_ROOT/bedolaga" backup-list || true ;;
+      12) bash "$BEDOLAGA_LIB_ROOT/bedolaga" rollback || true ;;
+      0) return 0 ;;
+      *) warn "Неизвестный пункт." ;;
+    esac
+    read_tty choice "\nНажмите Enter для продолжения..."
+  done
+}
+
+main() {
+  local command="${1:-menu}"
+  [[ $# -eq 0 ]] || shift
+  case "$command" in
+    install) install_stack "$@" ;;
+    menu) menu ;;
+    status) stack_status ;;
+    start) stack_start ;;
+    stop) stack_stop ;;
+    restart) stack_restart "$@" ;;
+    apply) stack_apply ;;
+    logs) stack_logs "$@" ;;
+    doctor) doctor ;;
+    config) config_edit "$@" ;;
+    versions) stack_versions ;;
+    update) update_components "$@" ;;
+    rollback) rollback_last_update ;;
+    backup)
+      if [[ "${1:-}" == "--automatic" ]]; then
+        backup_run automatic
+      else
+        backup_run manual
+      fi
+      ;;
+    backup-list) backup_list ;;
+    restore) backup_restore "$@" ;;
+    schedule) backup_schedule "$@" ;;
+    firewall) firewall_manage "$@" ;;
+    self-update) self_update ;;
+    uninstall) uninstall_stack "$@" ;;
+    version | --version | -v) printf 'Bedolaga Manager %s\n' "$BEDOLAGA_VERSION" ;;
+    help | --help | -h) usage ;;
+    *) error "Неизвестная команда: $command"; usage; return 2 ;;
+  esac
+}
+
+main "$@"

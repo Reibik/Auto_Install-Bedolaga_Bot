@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install checks
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Syntax
+        run: |
+          bash -n bedolaga install.sh tests/*.sh lib/*.sh
+      - name: ShellCheck
+        run: |
+          shellcheck -x bedolaga install.sh tests/*.sh lib/*.sh
+      - name: Tests
+        run: |
+          bash tests/smoke.sh
+          bash tests/lifecycle.sh
+      - name: Compose template
+        run: |
+          temp_dir="$(mktemp -d)"
+          touch "$temp_dir/bot.env" "$temp_dir/Caddyfile"
+          mkdir -p "$temp_dir/bot" "$temp_dir/cabinet" "$temp_dir/data/bot/locales"
+          touch "$temp_dir/bot/Dockerfile" "$temp_dir/bot/vpn_logo.png" "$temp_dir/cabinet/Dockerfile"
+          cat > "$temp_dir/stack.env" <<EOF
+          BOT_SOURCE_DIR="$temp_dir/bot"
+          CABINET_SOURCE_DIR="$temp_dir/cabinet"
+          CONFIG_ROOT="$temp_dir"
+          DATA_ROOT="$temp_dir/data"
+          BOT_ENV="$temp_dir/bot.env"
+          POSTGRES_DB="remnawave_bot"
+          POSTGRES_USER="remnawave_user"
+          POSTGRES_PASSWORD="test"
+          VITE_TELEGRAM_BOT_USERNAME="test_bot"
+          WEBHOOK_DOMAIN="hooks.example.com"
+          CABINET_DOMAIN="cabinet.example.com"
+          ACME_EMAIL="admin@example.com"
+          EOF
+          docker compose --env-file "$temp_dir/stack.env" -f templates/compose.yaml config --quiet
+
+  compatibility:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - ubuntu:22.04
+          - ubuntu:24.04
+          - debian:12
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Install test dependencies
+        run: apt-get update && apt-get install -y git ca-certificates
+      - uses: actions/checkout@v4
+      - name: Platform contract
+        run: bash tests/platform.sh
+      - name: Portable tests
+        run: |
+          bash tests/smoke.sh
+          bash tests/lifecycle.sh
