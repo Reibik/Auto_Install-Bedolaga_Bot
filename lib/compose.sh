@@ -1,11 +1,22 @@
 #!/usr/bin/env bash
 
+compose_up_or_diagnose() {
+  if compose up "$@"; then
+    return 0
+  fi
+  error "Docker Compose не смог запустить стек. Статусы и последние логи:"
+  compose ps || true
+  compose logs --tail=100 bot cabinet caddy postgres redis || true
+  return 1
+}
+
 stack_start() {
   require_root
   with_lock
+  sanitize_bot_env
   validate_configuration || die "Конфигурация не прошла проверку."
   info "Запускаю Bedolaga."
-  compose up -d --remove-orphans
+  compose_up_or_diagnose -d --remove-orphans || return 1
   info "Ожидаю готовность сервисов."
   if wait_for_health 300; then
     success "Все сервисы запущены и прошли health checks."
@@ -20,9 +31,10 @@ stack_start() {
 stack_apply() {
   require_root
   with_lock
+  sanitize_bot_env
   validate_configuration || die "Конфигурация не прошла проверку."
   info "Применяю конфигурацию и пересобираю компоненты, которым нужны build-time параметры."
-  compose up -d --build --force-recreate --remove-orphans
+  compose_up_or_diagnose -d --build --force-recreate --remove-orphans || return 1
   wait_for_health 300 || die "Конфигурация применена, но health checks не пройдены. Запустите bedolaga doctor."
   success "Конфигурация применена."
 }

@@ -64,6 +64,7 @@ update_components() {
   [[ "$bot_before" == "$bot_after" ]] || checkout_commit "$BOT_SOURCE_DIR" "$bot_after"
   [[ "$cabinet_before" == "$cabinet_after" ]] || checkout_commit "$CABINET_SOURCE_DIR" "$cabinet_after"
   dotenv_merge_missing "$BOT_ENV" "$BOT_SOURCE_DIR/.env.example"
+  sanitize_bot_env
   sync_bot_assets
 
   local -a build_services

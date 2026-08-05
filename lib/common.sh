@@ -7,7 +7,7 @@ BEDOLAGA_COMMON_LOADED=1
 
 # Переменные ниже используются другими файлами после source.
 # shellcheck disable=SC2034
-readonly BEDOLAGA_VERSION="1.0.3"
+readonly BEDOLAGA_VERSION="1.0.4"
 readonly BEDOLAGA_REPOSITORY="${BEDOLAGA_REPOSITORY:-Reibik/Auto_Install-Bedolaga_Bot}"
 readonly BOT_REPOSITORY="${BOT_REPOSITORY:-https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot.git}"
 readonly CABINET_REPOSITORY="${CABINET_REPOSITORY:-https://github.com/BEDOLAGA-DEV/bedolaga-cabinet.git}"

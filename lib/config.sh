@@ -168,6 +168,33 @@ initialize_env_files() {
     chmod 600 "$STACK_ENV"
   fi
   dotenv_merge_missing "$BOT_ENV" "$BOT_SOURCE_DIR/.env.example"
+  sanitize_bot_env
+}
+
+sanitize_bot_env() {
+  [[ -f "$BOT_ENV" ]] || return 0
+  local key value removed=0
+  local -a optional_integer_keys=(
+    ADMIN_REPORTS_TOPIC_ID
+    MULENPAY_SHOP_ID
+    FREEKASSA_SHOP_ID
+    FREEKASSA_PAYMENT_SYSTEM_ID
+    KASSA_AI_SHOP_ID
+    SEVERPAY_MID
+    APPLE_IAP_APP_APPLE_ID
+    LOG_ROTATION_TOPIC_ID
+  )
+  for key in "${optional_integer_keys[@]}"; do
+    grep -qE "^${key}=" "$BOT_ENV" 2>/dev/null || continue
+    value="$(dotenv_get "$BOT_ENV" "$key" 2>/dev/null || true)"
+    if [[ ! "$value" =~ ^-?[0-9]+$ ]]; then
+      dotenv_unset "$BOT_ENV" "$key"
+      ((removed += 1))
+    fi
+  done
+  if [[ "$removed" -gt 0 ]]; then
+    success "Удалены несовместимые placeholder-значения опциональных числовых параметров Bot: $removed."
+  fi
 }
 
 write_required_configuration() {
@@ -257,6 +284,7 @@ configuration_wizard() {
   local webhook_domain cabinet_domain email app_name app_logo timezone
 
   printf '\n%bBedolaga — мастер конфигурации%b\n\n' "$C_BOLD" "$C_RESET"
+  sanitize_bot_env
   configure_secret_input_mode
   current="$(dotenv_get "$BOT_ENV" BOT_TOKEN 2>/dev/null || true)"
   prompt_value token "Telegram Bot Token" "$current" validate_bot_token 1

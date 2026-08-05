@@ -21,7 +21,7 @@ install_stack() {
   fi
 
   validate_configuration || die "Сгенерированная конфигурация некорректна."
-  compose up -d --build --remove-orphans
+  compose_up_or_diagnose -d --build --remove-orphans || return 1
   if wait_for_health 300; then
     success "Bedolaga установлен."
     printf '\n  Cabinet: https://%s\n  Webhook: https://%s/webhook\n\n' "$CABINET_DOMAIN" "$WEBHOOK_DOMAIN"

@@ -54,6 +54,20 @@ dotenv_set() {
   mv -f "$temporary" "$file"
 }
 
+dotenv_unset() {
+  local file="$1"
+  local key="$2"
+  [[ -f "$file" ]] || return 0
+  [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] || die "Некорректное имя переменной: $key"
+  local temporary line
+  temporary="$(mktemp "${file}.XXXXXX")"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" == "$key="* ]] || printf '%s\n' "$line" >>"$temporary"
+  done <"$file"
+  chmod 600 "$temporary"
+  mv -f "$temporary" "$file"
+}
+
 dotenv_require() {
   local file="$1"
   shift

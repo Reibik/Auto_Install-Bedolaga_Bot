@@ -40,6 +40,18 @@ dotenv_merge_missing "$STACK_ENV" "$defaults"
 assert_equal "$(dotenv_get "$STACK_ENV" SIMPLE)" "value"
 assert_equal "$(dotenv_get "$STACK_ENV" NEW_DEFAULT)" "added"
 
+dotenv_set "$BOT_ENV" ADMIN_REPORTS_TOPIC_ID '# ID топика для отчетов'
+dotenv_set "$BOT_ENV" MULENPAY_SHOP_ID '<ID магазина>'
+dotenv_set "$BOT_ENV" FREEKASSA_SHOP_ID ''
+dotenv_set "$BOT_ENV" LOG_ROTATION_TOPIC_ID '-100123'
+sanitize_bot_env
+! grep -q '^ADMIN_REPORTS_TOPIC_ID=' "$BOT_ENV" || fail "comment placeholder was not removed"
+! grep -q '^MULENPAY_SHOP_ID=' "$BOT_ENV" || fail "text placeholder was not removed"
+! grep -q '^FREEKASSA_SHOP_ID=' "$BOT_ENV" || fail "empty optional integer was not removed"
+assert_equal "$(dotenv_get "$BOT_ENV" LOG_ROTATION_TOPIC_ID)" '-100123'
+dotenv_unset "$BOT_ENV" LOG_ROTATION_TOPIC_ID
+! grep -q '^LOG_ROTATION_TOPIC_ID=' "$BOT_ENV" || fail "dotenv_unset did not remove key"
+
 validate_domain "cabinet.example.com" || fail "valid domain rejected"
 ! validate_domain "https://cabinet.example.com" || fail "invalid domain accepted"
 validate_https_url "https://panel.example.com/api" || fail "valid URL rejected"
