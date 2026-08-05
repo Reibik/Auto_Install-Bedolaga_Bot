@@ -18,6 +18,8 @@ export BEDOLAGA_LIB_ROOT
 
 # shellcheck source=lib/common.sh
 source "$BEDOLAGA_LIB_ROOT/lib/common.sh"
+# shellcheck source=lib/ui.sh
+source "$BEDOLAGA_LIB_ROOT/lib/ui.sh"
 # shellcheck source=lib/env.sh
 source "$BEDOLAGA_LIB_ROOT/lib/env.sh"
 # shellcheck source=lib/system.sh
@@ -40,9 +42,9 @@ source "$BEDOLAGA_LIB_ROOT/lib/install.sh"
 trap 'on_error "$LINENO"' ERR
 
 usage() {
+  ui_banner 'Справка по командам'
+  ui_section 'Основные команды'
   cat <<'EOF'
-Bedolaga Manager — установка и управление Bedolaga Bot + Cabinet
-
 Использование:
   bedolaga install                  Первичная установка / повторный мастер
   bedolaga menu                     Интерактивное меню
@@ -64,41 +66,122 @@ Bedolaga Manager — установка и управление Bedolaga Bot + C
   bedolaga uninstall [--purge-data] Удалить проект
   bedolaga version                  Версия Manager
 EOF
+  ui_section 'Совместимость терминала'
+  cat <<'EOF'
+  NO_COLOR=1 bedolaga               Отключить ANSI-цвета
+  BEDOLAGA_EMOJI=0 bedolaga         Отключить эмодзи
+  BEDOLAGA_EMOJI=1 bedolaga         Принудительно включить эмодзи
+EOF
+}
+
+menu_summary() {
+  local os_name='не определена' docker_version='не установлен'
+  local service state healthy=0 problems=0
+  if detect_os 2>/dev/null; then
+    os_name="$OS_PRETTY"
+  fi
+  if command_exists docker; then
+    docker_version="$(docker version --format '{{.Server.Version}}' 2>/dev/null || docker --version 2>/dev/null | awk '{print $3}' | tr -d ',' || printf 'недоступен')"
+  fi
+  ui_key_value server 'Сервер' "$os_name"
+  ui_key_value docker 'Docker' "$docker_version"
+  if [[ -f "$COMPOSE_FILE" && -f "$STACK_ENV" ]]; then
+    ui_key_value package 'Bot' "$(git_short_commit "$BOT_SOURCE_DIR")"
+    ui_key_value package 'Cabinet' "$(git_short_commit "$CABINET_SOURCE_DIR")"
+    for service in postgres redis bot cabinet caddy; do
+      state="$(service_state "$service" 2>/dev/null || true)"
+      if [[ "$state" == running/healthy || "$state" == running/none ]]; then
+        ((healthy += 1))
+      else
+        ((problems += 1))
+      fi
+    done
+    if [[ "$healthy" -eq 5 ]]; then
+      ui_key_value healthy 'Состояние' 'Все сервисы работают'
+    elif [[ "$problems" -eq 5 ]]; then
+      ui_key_value stopped 'Состояние' 'Стек остановлен'
+    else
+      ui_key_value warning 'Состояние' "Требуют внимания: $problems"
+    fi
+  else
+    ui_key_value stopped 'Состояние' 'Проект ещё не установлен'
+  fi
+}
+
+menu_choose_service() {
+  local variable_name="$1"
+  local _bedolaga_service_choice=''
+  printf '\n'
+  ui_menu_item 1 bot 'Bot'
+  ui_menu_item 2 globe 'Cabinet'
+  ui_menu_item 3 lock 'Caddy'
+  ui_menu_item 4 package 'PostgreSQL'
+  ui_menu_item 5 package 'Redis'
+  ui_menu_item 0 package 'Все сервисы'
+  read_tty _bedolaga_service_choice "${C_CYAN}Выберите сервис [0]: ${C_RESET}"
+  case "$_bedolaga_service_choice" in
+    1) printf -v "$variable_name" '%s' bot ;;
+    2) printf -v "$variable_name" '%s' cabinet ;;
+    3) printf -v "$variable_name" '%s' caddy ;;
+    4) printf -v "$variable_name" '%s' postgres ;;
+    5) printf -v "$variable_name" '%s' redis ;;
+    '' | 0) printf -v "$variable_name" '%s' '' ;;
+    *) warn "Неизвестный сервис."; return 1 ;;
+  esac
 }
 
 menu() {
   require_root
-  local choice=''
+  local choice='' service=''
   while true; do
-    clear
-    printf '%bBedolaga Manager %s%b\n\n' "$C_BOLD" "$BEDOLAGA_VERSION" "$C_RESET"
-    stack_status 2>/dev/null || true
-    cat <<'EOF'
-
-  1. Статус
-  2. Запустить
-  3. Остановить
-  4. Перезапустить
-  5. Проверить обновления
-  6. Обновить всё
-  7. Диагностика
-  8. Логи
-  9. Настройка
- 10. Создать бэкап
- 11. Показать бэкапы
- 12. Откатить обновление
-  0. Выход
-EOF
-    read_tty choice "\n${C_CYAN}Выберите действие: ${C_RESET}"
+    ui_clear
+    ui_banner
+    printf '\n'
+    menu_summary
+    ui_section 'Управление'
+    ui_menu_item 1 status 'Статус сервисов'
+    ui_menu_item 2 start 'Запустить стек'
+    ui_menu_item 3 stop 'Остановить стек'
+    ui_menu_item 4 restart 'Перезапустить сервис'
+    ui_menu_item 5 update 'Проверить обновления'
+    ui_menu_item 6 deploy 'Обновить проект'
+    ui_section 'Обслуживание'
+    ui_menu_item 7 doctor 'Диагностика'
+    ui_menu_item 8 logs 'Просмотр логов'
+    ui_menu_item 9 config 'Настройка проекта'
+    ui_menu_item 10 backup 'Создать резервную копию'
+    ui_menu_item 11 archives 'Управление резервными копиями'
+    ui_menu_item 12 rollback 'Откатить обновление'
+    ui_separator
+    ui_menu_item 0 exit 'Выход'
+    read_tty choice "\n${C_CYAN}Выберите действие › ${C_RESET}"
     case "$choice" in
       1) bash "$BEDOLAGA_LIB_ROOT/bedolaga" status || true ;;
       2) bash "$BEDOLAGA_LIB_ROOT/bedolaga" start || true ;;
       3) bash "$BEDOLAGA_LIB_ROOT/bedolaga" stop || true ;;
-      4) bash "$BEDOLAGA_LIB_ROOT/bedolaga" restart || true ;;
+      4)
+        service=''
+        if menu_choose_service service; then
+          if [[ -n "$service" ]]; then
+            bash "$BEDOLAGA_LIB_ROOT/bedolaga" restart "$service" || true
+          else
+            bash "$BEDOLAGA_LIB_ROOT/bedolaga" restart || true
+          fi
+        fi
+        ;;
       5) bash "$BEDOLAGA_LIB_ROOT/bedolaga" versions || true ;;
       6) bash "$BEDOLAGA_LIB_ROOT/bedolaga" update all || true ;;
       7) bash "$BEDOLAGA_LIB_ROOT/bedolaga" doctor || true ;;
-      8) bash "$BEDOLAGA_LIB_ROOT/bedolaga" logs || true ;;
+      8)
+        service=''
+        if menu_choose_service service; then
+          if [[ -n "$service" ]]; then
+            bash "$BEDOLAGA_LIB_ROOT/bedolaga" logs "$service" || true
+          else
+            bash "$BEDOLAGA_LIB_ROOT/bedolaga" logs || true
+          fi
+        fi
+        ;;
       9)
         if bash "$BEDOLAGA_LIB_ROOT/bedolaga" config wizard; then
           if confirm "Применить новую конфигурацию сейчас?"; then
@@ -112,7 +195,7 @@ EOF
       0) return 0 ;;
       *) warn "Неизвестный пункт." ;;
     esac
-    read_tty choice "\nНажмите Enter для продолжения..."
+    read_tty choice "\n${C_CYAN}Нажмите Enter для возврата в меню...${C_RESET}"
   done
 }
 

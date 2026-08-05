@@ -50,7 +50,12 @@ stack_restart() {
   require_root
   with_lock
   compose restart "$@"
-  wait_for_health 180 || warn "После перезапуска не все сервисы healthy. Запустите bedolaga doctor."
+  if wait_for_health 180; then
+    success "Перезапуск завершён, сервисы работают нормально."
+  else
+    warn "После перезапуска не все сервисы healthy. Запустите bedolaga doctor."
+    return 1
+  fi
 }
 
 stack_status() {
@@ -59,15 +64,33 @@ stack_status() {
     warn "Bedolaga ещё не установлен."
     return 1
   fi
-  printf '%bBedolaga Manager %s%b\n' "$C_BOLD" "$BEDOLAGA_VERSION" "$C_RESET"
-  printf 'Bot commit:     %s\n' "$(git_short_commit "$BOT_SOURCE_DIR")"
-  printf 'Cabinet commit: %s\n\n' "$(git_short_commit "$CABINET_SOURCE_DIR")"
-  compose ps
+  local service state failures=0
+  ui_banner 'Состояние и версии компонентов'
+  ui_section 'Состояние сервисов'
+  for service in postgres redis bot cabinet caddy; do
+    state="$(service_state "$service" 2>/dev/null || true)"
+    ui_service_row "$service" "$state"
+    [[ "$state" == running/healthy || "$state" == running/none ]] || ((failures += 1))
+  done
+  ui_section 'Версии'
+  ui_key_value package 'Manager' "v${BEDOLAGA_VERSION}"
+  ui_key_value package 'Bot commit' "$(git_short_commit "$BOT_SOURCE_DIR")"
+  ui_key_value package 'Cabinet commit' "$(git_short_commit "$CABINET_SOURCE_DIR")"
+  printf '\n'
+  if [[ "$failures" -eq 0 ]]; then
+    success "Все компоненты работают нормально."
+    return 0
+  fi
+  error "Требуют внимания сервисов: $failures."
+  ui_hint "Запустите диагностику: bedolaga doctor"
+  return 1
 }
 
 stack_logs() {
   require_root
   local service="${1:-}"
+  ui_banner 'Журнал сервисов · Ctrl+C для выхода'
+  printf '\n'
   if [[ -n "$service" ]]; then
     case "$service" in
       bot | cabinet | caddy | postgres | redis) ;;
@@ -89,9 +112,16 @@ stack_versions() {
   git -C "$CABINET_SOURCE_DIR" fetch -q origin "${CABINET_REF:-main}"
   bot_remote="$(git -C "$BOT_SOURCE_DIR" rev-parse "origin/${BOT_REF:-main}")"
   cabinet_remote="$(git -C "$CABINET_SOURCE_DIR" rev-parse "origin/${CABINET_REF:-main}")"
-  printf 'Компонент  Текущая       Доступная      Статус\n'
-  printf 'Bot        %.12s  %.12s  %s\n' "$bot_current" "$bot_remote" "$([[ "$bot_current" == "$bot_remote" ]] && printf актуально || printf обновление)"
-  printf 'Cabinet    %.12s  %.12s  %s\n' "$cabinet_current" "$cabinet_remote" "$([[ "$cabinet_current" == "$cabinet_remote" ]] && printf актуально || printf обновление)"
+  ui_banner 'Проверка обновлений'
+  ui_section 'Доступные версии'
+  printf '  %-10s %-14s %-14s %s\n' 'Компонент' 'Текущая' 'Доступная' 'Статус'
+  printf '  %-10s %.12s   %.12s   %s\n' 'Bot' "$bot_current" "$bot_remote" "$([[ "$bot_current" == "$bot_remote" ]] && printf '%s актуально' "$(ui_icon success)" || printf '%s доступно' "$(ui_icon update)")"
+  printf '  %-10s %.12s   %.12s   %s\n' 'Cabinet' "$cabinet_current" "$cabinet_remote" "$([[ "$cabinet_current" == "$cabinet_remote" ]] && printf '%s актуально' "$(ui_icon success)" || printf '%s доступно' "$(ui_icon update)")"
+  if [[ "$bot_current" == "$bot_remote" && "$cabinet_current" == "$cabinet_remote" ]]; then
+    success "Установлены актуальные версии."
+  else
+    ui_hint "Для обновления выполните: bedolaga update all"
+  fi
 }
 
 config_edit() {

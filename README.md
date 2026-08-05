@@ -101,6 +101,14 @@ Username бота определяется автоматически через
 bedolaga
 ```
 
+Меню автоматически использует цвета, эмодзи и Unicode-разделители в совместимом интерактивном терминале. Для минимального ASCII-вывода:
+
+```bash
+NO_COLOR=1 BEDOLAGA_EMOJI=0 bedolaga
+```
+
+Эмодзи можно принудительно включить через `BEDOLAGA_EMOJI=1`.
+
 Или используйте отдельные команды:
 
 | Команда | Назначение |
@@ -254,6 +262,7 @@ bash -n bedolaga install.sh tests/*.sh lib/*.sh
 shellcheck -x bedolaga install.sh tests/*.sh lib/*.sh
 bash tests/smoke.sh
 bash tests/lifecycle.sh
+bash tests/ui.sh
 ```
 
 CI дополнительно проверяет итоговый Docker Compose и запускает тесты в чистых контейнерах Ubuntu 22.04, Ubuntu 24.04 и Debian 12.

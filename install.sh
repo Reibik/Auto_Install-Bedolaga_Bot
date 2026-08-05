@@ -51,7 +51,7 @@ tar -xzf "$archive" -C "$temporary_root"
 
 source_root="$(find "$temporary_root" -mindepth 1 -maxdepth 1 -type d -print -quit)"
 [[ -x "$source_root/bedolaga" || -f "$source_root/bedolaga" ]] || { printf 'В архиве отсутствует bedolaga.\n' >&2; exit 1; }
-[[ -f "$source_root/lib/common.sh" && -f "$source_root/templates/compose.yaml" ]] || { printf 'Архив Manager неполный.\n' >&2; exit 1; }
+[[ -f "$source_root/lib/common.sh" && -f "$source_root/lib/ui.sh" && -f "$source_root/templates/compose.yaml" ]] || { printf 'Архив Manager неполный.\n' >&2; exit 1; }
 
 staging="/usr/local/lib/.bedolaga-manager.new.$$"
 previous="/usr/local/lib/bedolaga-manager.previous"

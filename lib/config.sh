@@ -69,7 +69,7 @@ prompt_value() {
       continue
     fi
     if [[ "$secret" -eq 1 ]]; then
-      printf '%b\n' "${C_GREEN}[✓]${C_RESET} Секретное значение принято." >/dev/tty
+      printf '%b\n' "${C_GREEN}$(ui_icon success)${C_RESET} Секретное значение принято." >/dev/tty
     fi
     printf -v "$variable_name" '%s' "$value"
     return 0
@@ -283,7 +283,9 @@ configuration_wizard() {
   local current token admin_ids username detected_username remnawave_url remnawave_key
   local webhook_domain cabinet_domain email app_name app_logo timezone
 
-  printf '\n%bBedolaga — мастер конфигурации%b\n\n' "$C_BOLD" "$C_RESET"
+  printf '\n'
+  ui_banner 'Мастер конфигурации'
+  ui_section 'Основные параметры'
   sanitize_bot_env
   configure_secret_input_mode
   current="$(dotenv_get "$BOT_ENV" BOT_TOKEN 2>/dev/null || true)"

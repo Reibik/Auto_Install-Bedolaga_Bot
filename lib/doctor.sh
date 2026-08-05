@@ -4,10 +4,10 @@ doctor_check() {
   local label="$1"
   shift
   if "$@" >/dev/null 2>&1; then
-    printf '  %b✓%b %s\n' "$C_GREEN" "$C_RESET" "$label"
+    printf '  %b%s%b %s\n' "$C_GREEN" "$(ui_icon success)" "$C_RESET" "$label"
     return 0
   fi
-  printf '  %b✗%b %s\n' "$C_RED" "$C_RESET" "$label"
+  printf '  %b%s%b %s\n' "$C_RED" "$(ui_icon error)" "$C_RESET" "$label"
   return 1
 }
 
@@ -44,7 +44,8 @@ check_cors_configuration() {
 doctor() {
   require_root
   local failures=0 webhook_domain cabinet_domain
-  printf '%bДиагностика Bedolaga%b\n\n' "$C_BOLD" "$C_RESET"
+  ui_banner 'Комплексная диагностика'
+  ui_section 'Проверки'
   doctor_check "Docker daemon" docker info || ((failures += 1))
   doctor_check "Docker Compose v2" docker compose version || ((failures += 1))
   doctor_check "Файл конфигурации Stack" test -s "$STACK_ENV" || ((failures += 1))
@@ -85,6 +86,6 @@ doctor() {
     return 0
   fi
   error "Обнаружено проблем: $failures"
-  printf 'Подробные логи: bedolaga logs <bot|cabinet|caddy>\n'
+  ui_hint "Подробные логи: bedolaga logs <bot|cabinet|caddy>"
   return 1
 }

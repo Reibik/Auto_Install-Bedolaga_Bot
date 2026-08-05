@@ -24,6 +24,7 @@ jobs:
         run: |
           bash tests/smoke.sh
           bash tests/lifecycle.sh
+          bash tests/ui.sh
       - name: Compose template
         run: |
           temp_dir="$(mktemp -d)"
@@ -67,3 +68,4 @@ jobs:
         run: |
           bash tests/smoke.sh
           bash tests/lifecycle.sh
+          bash tests/ui.sh
