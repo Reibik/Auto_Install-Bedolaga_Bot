@@ -1,130 +1,168 @@
-# Bedolaga Auto Installer
+<div align="center">
 
-Безопасный установщик и менеджер для полного стека
-[Bedolaga Bot](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot) +
-[Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet) + PostgreSQL + Redis + Caddy.
+# 🚀 Bedolaga Auto Installer
 
-Одна команда устанавливает системные зависимости, задаёт вопросы по конфигурации, собирает контейнеры, получает HTTPS-сертификаты и проверяет здоровье сервисов. После установки всё управляется командой `bedolaga`.
+### Установка и управление Bedolaga Bot + Cabinet одной командой
 
-## Быстрый старт
+[![CI](https://img.shields.io/github/actions/workflow/status/Reibik/Auto_Install-Bedolaga_Bot/ci.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI)](https://github.com/Reibik/Auto_Install-Bedolaga_Bot/actions/workflows/ci.yml)
+[![Security](https://img.shields.io/github/actions/workflow/status/Reibik/Auto_Install-Bedolaga_Bot/security.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=Security)](https://github.com/Reibik/Auto_Install-Bedolaga_Bot/actions/workflows/security.yml)
+[![License](https://img.shields.io/github/license/Reibik/Auto_Install-Bedolaga_Bot?style=for-the-badge&color=7c3aed)](LICENSE)
+[![Shell](https://img.shields.io/badge/Shell-Bash-22c55e?style=for-the-badge&logo=gnubash&logoColor=white)](https://www.gnu.org/software/bash/)
 
-Перед запуском подготовьте:
+**Автоматическая установка · HTTPS · Обновления · Откат · Бэкапы · Диагностика**
 
-- чистый сервер Ubuntu 22.04/24.04 или Debian 12;
-- минимум 1 GB RAM и 4 GB свободного места, рекомендуется 2 GB RAM и 10 GB;
-- свободные входящие порты 80 и 443;
-- root-доступ;
-- два домена с A-записями на IP сервера;
-- токен Telegram-бота и Telegram ID администратора;
-- URL и API key уже работающей Remnawave Panel.
+[Быстрый старт](#quick-start) · [Возможности](#features) · [Управление](#management) · [Архитектура](#architecture) · [Поддержка](#support)
 
-Запуск:
+</div>
+
+![Пример работы установщика Bedolaga Manager](docs/assets/bedolaga-installer.png)
+
+> [!NOTE]
+> **Bedolaga Manager** разворачивает [Bedolaga Bot](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot), [Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet), PostgreSQL, Redis и Caddy, а затем управляет всем стеком через единую команду `bedolaga`.
+
+---
+
+<a id="features"></a>
+## ✨ Возможности
+
+| | Возможность | Что получает пользователь |
+|:--:|---|---|
+| ⚡ | **Установка одной командой** | Проверка сервера, установка зависимостей и запуск всего стека |
+| 🧙 | **Интерактивный мастер** | Пошаговая настройка Telegram, Remnawave, доменов и брендинга |
+| 🔐 | **Безопасные секреты** | Локальная генерация паролей, JWT и webhook/API secrets через OpenSSL |
+| 🌐 | **Автоматический HTTPS** | Caddy получает и продлевает TLS-сертификаты для Bot и Cabinet |
+| 🔄 | **Контролируемые обновления** | Бэкап перед обновлением, health checks и автоматический откат при ошибке |
+| 💾 | **Резервные копии** | PostgreSQL, конфигурация и данные с SHA-256 проверкой целостности |
+| 🩺 | **Встроенная диагностика** | Проверка DNS, HTTPS, API, Docker Compose и состояния контейнеров |
+| 🛡️ | **Безопасная сеть** | Наружу открыты только веб-порты, PostgreSQL и Redis изолированы |
+
+---
+
+<a id="quick-start"></a>
+## 🚀 Быстрый старт
+
+Запустите на **чистом сервере** от имени `root`:
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/install.sh)
 ```
 
-Установка зафиксированного релиза:
+Установщик проверит систему, задаст вопросы по конфигурации, развернёт сервисы и проверит их работоспособность. После завершения откройте главное меню:
 
 ```bash
-BEDOLAGA_REF=v1.0.0 bash <(curl -fsSL https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/install.sh)
+bedolaga
 ```
 
-Установщик спросит:
+<details>
+<summary><strong>📋 Требования к серверу и подготовка</strong></summary>
 
-1. Telegram Bot Token.
-2. Telegram ID администраторов.
-3. URL и API key Remnawave.
-4. Домен Telegram webhook.
-5. Домен Cabinet.
-6. Email для Let's Encrypt.
-7. Название, короткий логотип и часовой пояс.
+### Сервер
 
-Username бота определяется автоматически через Telegram API. Пароли PostgreSQL, JWT и webhook/API secrets генерируются локально через OpenSSL.
+- Ubuntu 22.04 / 24.04 или Debian 12;
+- минимум 1 GB RAM и 4 GB свободного места;
+- рекомендуется 2 GB RAM и 10 GB свободного места;
+- свободные входящие порты `80` и `443`;
+- доступ пользователя `root`.
 
-> Установщик не разворачивает саму Remnawave Panel. Она является обязательной внешней зависимостью Bedolaga Bot.
+### Что подготовить заранее
 
-## Команды
+- два домена с A-записями на IP сервера: для webhook и Cabinet;
+- токен Telegram-бота;
+- Telegram ID администратора или администраторов;
+- URL и API key работающей Remnawave Panel;
+- email для выпуска Let's Encrypt сертификатов.
+
+</details>
+
+> [!IMPORTANT]
+> Установщик **не разворачивает Remnawave Panel**. Она должна быть установлена заранее и доступна по API.
+
+### Что спросит мастер
+
+1. Telegram Bot Token и ID администраторов.
+2. URL и API key Remnawave.
+3. Домены Telegram webhook и Cabinet.
+4. Email для Let's Encrypt.
+5. Название проекта, короткий логотип и часовой пояс.
+
+Username бота определяется автоматически через Telegram API. Пароли PostgreSQL, JWT и служебные секреты генерируются локально.
+
+---
+
+<a id="management"></a>
+## 🎛️ Управление
+
+Запустите интерактивное меню без аргументов:
 
 ```bash
-bedolaga                         # интерактивное меню
-bedolaga status                  # контейнеры и текущие commit
-bedolaga start
-bedolaga stop
-bedolaga restart [service]
-bedolaga apply                   # применить .env, Caddy и branding
-bedolaga logs [service]
-bedolaga doctor                  # DNS, HTTPS, Compose, API, health checks
-bedolaga config wizard           # повторный мастер настройки
-bedolaga config bot              # полный .env Bedolaga Bot
-bedolaga config stack            # параметры стека и branding
-bedolaga config caddy
-bedolaga versions                # сравнить локальные и origin commit
-bedolaga update [all|bot|cabinet]
-bedolaga rollback
-bedolaga backup
-bedolaga backup-list
-bedolaga restore <archive>
-bedolaga schedule enable         # ежедневный systemd timer
-bedolaga firewall enable         # UFW: текущий SSH-порт + 80/443
-bedolaga self-update
+bedolaga
 ```
 
-Сервисы для `logs` и `restart`: `bot`, `cabinet`, `caddy`, `postgres`, `redis`.
-После изменения конфигурации используйте `bedolaga apply`: обычный `restart` не перечитывает переменные окружения контейнера.
+Или используйте отдельные команды:
 
-## Архитектура
+| Команда | Назначение |
+|---|---|
+| `bedolaga status` | Состояние контейнеров и текущие версии |
+| `bedolaga start` | Запустить весь стек |
+| `bedolaga stop` | Остановить весь стек |
+| `bedolaga restart [service]` | Перезапустить стек или отдельный сервис |
+| `bedolaga logs [service]` | Открыть логи сервиса |
+| `bedolaga doctor` | Проверить DNS, HTTPS, API и контейнеры |
+| `bedolaga config wizard` | Повторно запустить мастер настройки |
+| `bedolaga apply` | Применить `.env`, Caddy и branding |
+| `bedolaga versions` | Сравнить локальные и доступные версии |
+| `bedolaga update [all\|bot\|cabinet]` | Обновить весь проект или компонент |
+| `bedolaga rollback` | Откатить последнее обновление приложений |
+| `bedolaga backup` | Создать резервную копию |
+| `bedolaga backup-list` | Показать доступные копии |
+| `bedolaga restore <archive>` | Восстановить выбранную копию |
+| `bedolaga schedule enable` | Включить ежедневные автобэкапы |
+| `bedolaga firewall enable` | Настроить UFW для SSH, HTTP и HTTPS |
+| `bedolaga self-update` | Обновить Bedolaga Manager |
 
-```text
-Internet :80/:443
-        │
-      Caddy ───── cabinet.example.com ── Cabinet
-        │                  └── /api/* ── Bot API
-        └──── hooks.example.com ──────── Bot webhook
-                                             │
-                                   PostgreSQL + Redis
-                                             │
-                                      Remnawave API
+Доступные сервисы для `logs` и `restart`: `bot`, `cabinet`, `caddy`, `postgres`, `redis`.
+
+> [!TIP]
+> После изменения конфигурации используйте `bedolaga apply`. Обычный `restart` не перечитывает переменные окружения уже созданного контейнера.
+
+---
+
+<a id="architecture"></a>
+## 🏗️ Архитектура
+
+```mermaid
+flowchart TD
+    Internet([🌍 Internet :80 / :443]) --> Caddy[🔐 Caddy + automatic HTTPS]
+    Caddy -->|cabinet.example.com| Cabinet[🖥️ Bedolaga Cabinet]
+    Caddy -->|/api/*| BotAPI[🤖 Bot API]
+    Caddy -->|hooks.example.com| Webhook[📨 Telegram Webhook]
+    Cabinet --> BotAPI
+    Webhook --> BotAPI
+    BotAPI --> PostgreSQL[(🐘 PostgreSQL)]
+    BotAPI --> Redis[(⚡ Redis)]
+    BotAPI --> Remnawave[☁️ Remnawave API]
 ```
 
-- Наружу публикуются только 80/TCP, 443/TCP и 443/UDP.
-- PostgreSQL и Redis находятся в изолированной внутренней Docker-сети.
-- Cabinet и Bot не публикуют host-порты.
-- Caddy автоматически получает и продлевает TLS-сертификаты.
-- Все Docker-ресурсы имеют label `dev.reibik.bedolaga.managed=true`.
+- наружу публикуются только `80/TCP`, `443/TCP` и `443/UDP`;
+- PostgreSQL и Redis находятся во внутренней Docker-сети;
+- Bot и Cabinet не публикуют host-порты напрямую;
+- Caddy автоматически получает и продлевает TLS-сертификаты;
+- управляемые Docker-ресурсы получают label `dev.reibik.bedolaga.managed=true`.
 
-Подробнее: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Подробнее: [документация по архитектуре](docs/ARCHITECTURE.md).
 
-## Файлы на сервере
+---
 
-```text
-/usr/local/bin/bedolaga                 CLI
-/usr/local/lib/bedolaga-manager/        код менеджера
-/opt/bedolaga/compose.yaml              управляемый Compose
-/opt/bedolaga/sources/bot/              checkout Bot
-/opt/bedolaga/sources/cabinet/          checkout Cabinet
-/etc/bedolaga/stack.env                 параметры Compose
-/etc/bedolaga/bot.env                   полный .env Bot
-/etc/bedolaga/Caddyfile                 reverse proxy
-/var/lib/bedolaga/bot/                  постоянные данные Bot
-/var/lib/bedolaga/backups/              резервные копии
-/var/lib/bedolaga/state/                состояние обновлений
-```
+## 🔄 Обновления и откат
 
-Секретные файлы создаются с правами `600`, каталоги конфигурации — `700`.
-Логотип сообщений можно заменить в `/var/lib/bedolaga/bot/vpn_logo.png`; upstream checkout при этом останется чистым.
+Команда `bedolaga update` выполняет безопасный цикл обновления:
 
-## Обновления и откат
-
-`bedolaga update`:
-
-1. Отказывается работать при локальных изменениях upstream checkout.
-2. Получает новые commit из настроенной ветки.
-3. Создаёт PostgreSQL dump и бэкап конфигурации.
-4. Переключает checkout в detached mode без `git reset --hard`.
-5. Собирает новые образы до перезапуска.
-6. Запускает сервисы и ждёт health checks.
-7. При ошибке автоматически возвращает предыдущие commit приложения.
+1. Проверяет отсутствие локальных изменений в upstream checkout.
+2. Получает новые версии Bot и Cabinet.
+3. Создаёт дамп PostgreSQL и бэкап конфигурации.
+4. Собирает новые Docker-образы до перезапуска сервисов.
+5. Запускает стек и ожидает успешные health checks.
+6. При ошибке автоматически возвращает предыдущие версии приложений.
 
 Ручной откат:
 
@@ -132,37 +170,81 @@ Internet :80/:443
 bedolaga rollback
 ```
 
-Откат приложения не откатывает миграции базы автоматически. Перед каждым обновлением сохраняется полный бэкап; при несовместимой схеме используйте `bedolaga restore`.
+> [!WARNING]
+> Откат версии приложения не отменяет миграции базы данных. Перед каждым обновлением создаётся полный бэкап; при несовместимости схемы используйте `bedolaga restore`.
 
-## Резервные копии
+---
+
+## 💾 Резервные копии
 
 В архив входят:
 
-- PostgreSQL dump в custom format;
+- дамп PostgreSQL в custom format;
 - `stack.env`, `bot.env` и Caddyfile;
 - постоянные данные, uploads и локали Bot;
-- commit Bot/Cabinet и версия Manager;
-- SHA-256 checksum.
+- версии Manager, Bot и Cabinet;
+- SHA-256 checksum для проверки целостности.
 
-Автобэкап выполняется systemd timer около 03:00. По умолчанию хранится семь автоматических архивов. Ручные и emergency-бэкапы автоматически не удаляются.
+Автобэкап запускается systemd timer примерно в `03:00`. По умолчанию хранятся семь автоматических архивов; ручные и аварийные копии автоматически не удаляются.
 
-## Безопасное удаление
+---
 
-Сохранить данные и бэкапы:
+## 🔒 Безопасность
+
+- конфигурационные каталоги создаются с правами `700`;
+- файлы с секретами создаются с правами `600`;
+- секреты не передаются сторонним генераторам;
+- база данных и Redis недоступны напрямую из интернета;
+- UFW учитывает текущий SSH-порт перед применением правил;
+- CI проверяет ShellCheck, распространённые форматы секретов и опасные shell-паттерны.
+
+Инструкции по ответственному раскрытию уязвимостей находятся в [SECURITY.md](SECURITY.md).
+
+---
+
+<details>
+<summary><strong>📁 Расположение файлов на сервере</strong></summary>
+
+```text
+/usr/local/bin/bedolaga                 CLI
+/usr/local/lib/bedolaga-manager/        код менеджера
+/opt/bedolaga/compose.yaml              управляемый Docker Compose
+/opt/bedolaga/sources/bot/              исходный код Bot
+/opt/bedolaga/sources/cabinet/          исходный код Cabinet
+/etc/bedolaga/stack.env                 параметры Compose
+/etc/bedolaga/bot.env                   конфигурация Bot
+/etc/bedolaga/Caddyfile                 reverse proxy
+/var/lib/bedolaga/bot/                  постоянные данные Bot
+/var/lib/bedolaga/backups/              резервные копии
+/var/lib/bedolaga/state/                состояние обновлений
+```
+
+Логотип сообщений можно заменить в `/var/lib/bedolaga/bot/vpn_logo.png` — upstream checkout останется чистым.
+
+</details>
+
+<details>
+<summary><strong>🗑️ Безопасное удаление</strong></summary>
+
+Удалить сервисы, сохранив данные и резервные копии:
 
 ```bash
 bedolaga uninstall
 ```
 
-Необратимо удалить контейнеры, volumes, конфигурацию и бэкапы:
+Полностью удалить контейнеры, volumes, конфигурацию и бэкапы:
 
 ```bash
 bedolaga uninstall --purge-data
 ```
 
-Полное удаление требует ввода фразы `PURGE-BEDOLAGA`.
+Полное удаление необратимо и потребует ввода фразы `PURGE-BEDOLAGA`.
 
-## Разработка
+</details>
+
+---
+
+## 🧪 Разработка
 
 ```bash
 bash -n bedolaga install.sh tests/*.sh lib/*.sh
@@ -171,9 +253,46 @@ bash tests/smoke.sh
 bash tests/lifecycle.sh
 ```
 
-CI дополнительно проверяет итоговый Compose через `docker compose config`.
-Матрица совместимости запускает тесты в чистых контейнерах Ubuntu 22.04, Ubuntu 24.04 и Debian 12.
+CI дополнительно проверяет итоговый Docker Compose и запускает тесты в чистых контейнерах Ubuntu 22.04, Ubuntu 24.04 и Debian 12.
 
-## Лицензия
+Рекомендации для участников: [CONTRIBUTING.md](CONTRIBUTING.md).
 
-[MIT](LICENSE). Bedolaga Bot и Bedolaga Cabinet распространяются их авторами на условиях собственных лицензий.
+---
+
+<a id="support"></a>
+## 💰 Поддержка
+
+Если проект оказался полезным, можете поддержать разработку:
+
+| Сеть | Адрес |
+|---|---|
+| **TON** | `UQBoEJvftr-Lz4xZoXSDRlJQbaRC_nZoMhvbi9ufeiMNLTOb` |
+| **USDT TRC20** | `TRu92kG4LZ7nmubW3o31x19WagejmNt9PC` |
+| **BTC** | `bc1qy82xy9sqp2kq4rvqjqrvfdl9k0s7hvy7pk3rnt` |
+
+> [!CAUTION]
+> Перед отправкой проверьте адрес и выбранную сеть. Криптовалютные переводы необратимы.
+
+Спасибо за поддержку проекта! 💜
+
+---
+
+## 🤝 Связанные проекты
+
+- [BEDOLAGA-DEV / remnawave-bedolaga-telegram-bot](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot)
+- [BEDOLAGA-DEV / bedolaga-cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet)
+- [Документация Bedolaga](https://bedolagadev.mintlify.app/introduction)
+
+---
+
+## 📄 Лицензия
+
+Bedolaga Auto Installer распространяется по лицензии [MIT](LICENSE). Bedolaga Bot и Bedolaga Cabinet распространяются их авторами на условиях собственных лицензий.
+
+<div align="center">
+
+**Сделано с заботой о простой и безопасной установке** 💜
+
+⭐ Если проект полезен — поставьте звезду репозиторию
+
+</div>
