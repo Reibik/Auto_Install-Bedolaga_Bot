@@ -43,12 +43,24 @@ prompt_value() {
       fi
     fi
     if [[ "$secret" -eq 1 ]]; then
-      read_secret_tty value "${C_CYAN}${label}${suffix}: ${C_RESET}"
+      if [[ "${BEDOLAGA_VISIBLE_SECRET_INPUT:-0}" == "1" ]]; then
+        read_tty value "${C_CYAN}${label}${suffix} [ВИДИМЫЙ ВВОД]: ${C_RESET}"
+      else
+        read_secret_tty value "${C_CYAN}${label}${suffix}: ${C_RESET}"
+      fi
     else
       read_tty value "${C_CYAN}${label}${suffix}: ${C_RESET}"
     fi
     [[ -n "$value" ]] || value="$default_value"
     if [[ -z "$value" ]]; then
+      if [[ "$secret" -eq 1 && "${BEDOLAGA_VISIBLE_SECRET_INPUT:-0}" != "1" ]]; then
+        warn "Скрытый ввод не получил значение. Некоторые web-консоли блокируют вставку при отключённом отображении символов."
+        if confirm "Переключиться на видимый ввод для секретов в текущем мастере?"; then
+          BEDOLAGA_VISIBLE_SECRET_INPUT=1
+          warn "Видимый ввод включён. Секрет будет отображаться на экране, но не попадёт в лог или историю команд."
+          continue
+        fi
+      fi
       warn "Значение обязательно."
       continue
     fi
@@ -61,6 +73,32 @@ prompt_value() {
     fi
     printf -v "$variable_name" '%s' "$value"
     return 0
+  done
+}
+
+configure_secret_input_mode() {
+  local choice=''
+  tty_available || die "Для мастера конфигурации требуется интерактивная SSH- или web-консоль."
+  while true; do
+    cat >/dev/tty <<'EOF'
+
+Режим ввода Telegram Bot Token и API key:
+  1. Скрытый — символы не отображаются (рекомендуется для SSH)
+  2. Видимый — для web-консолей, которые блокируют вставку в скрытые поля
+EOF
+    read_tty choice "${C_CYAN}Выберите режим [1]: ${C_RESET}"
+    case "$choice" in
+      '' | 1)
+        BEDOLAGA_VISIBLE_SECRET_INPUT=0
+        return 0
+        ;;
+      2)
+        BEDOLAGA_VISIBLE_SECRET_INPUT=1
+        warn "Видимый ввод включён. Секреты будут видны на экране, но не попадут в лог или историю команд."
+        return 0
+        ;;
+      *) warn "Введите 1 или 2." ;;
+    esac
   done
 }
 
@@ -219,6 +257,7 @@ configuration_wizard() {
   local webhook_domain cabinet_domain email app_name app_logo timezone
 
   printf '\n%bBedolaga — мастер конфигурации%b\n\n' "$C_BOLD" "$C_RESET"
+  configure_secret_input_mode
   current="$(dotenv_get "$BOT_ENV" BOT_TOKEN 2>/dev/null || true)"
   prompt_value token "Telegram Bot Token" "$current" validate_bot_token 1
   detected_username="$(verify_telegram_token "$token" || true)"
