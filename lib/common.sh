@@ -7,7 +7,7 @@ BEDOLAGA_COMMON_LOADED=1
 
 # Переменные ниже используются другими файлами после source.
 # shellcheck disable=SC2034
-readonly BEDOLAGA_VERSION="1.0.2"
+readonly BEDOLAGA_VERSION="1.0.3"
 readonly BEDOLAGA_REPOSITORY="${BEDOLAGA_REPOSITORY:-Reibik/Auto_Install-Bedolaga_Bot}"
 readonly BOT_REPOSITORY="${BOT_REPOSITORY:-https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot.git}"
 readonly CABINET_REPOSITORY="${CABINET_REPOSITORY:-https://github.com/BEDOLAGA-DEV/bedolaga-cabinet.git}"
@@ -102,23 +102,23 @@ tty_available() { [[ -r /dev/tty && -w /dev/tty ]]; }
 read_tty() {
   local variable_name="$1"
   local prompt_text="$2"
-  local value=''
+  local _bedolaga_tty_input=''
   tty_available || die "Для этой команды требуется интерактивная SSH-сессия."
   printf '%b' "$prompt_text" >/dev/tty
-  IFS= read -r value </dev/tty
-  printf -v "$variable_name" '%s' "$value"
+  IFS= read -r _bedolaga_tty_input </dev/tty
+  printf -v "$variable_name" '%s' "$_bedolaga_tty_input"
 }
 
 read_secret_tty() {
   local variable_name="$1"
   local prompt_text="$2"
-  local value=''
+  local _bedolaga_tty_input=''
   tty_available || die "Для этой команды требуется интерактивная SSH-сессия."
   printf '%b\n' "${C_YELLOW}  ↳ Ввод скрыт: символы не отображаются. Вставьте значение и нажмите Enter.${C_RESET}" >/dev/tty
   printf '%b' "$prompt_text" >/dev/tty
-  IFS= read -r -s value </dev/tty
+  IFS= read -r -s _bedolaga_tty_input </dev/tty
   printf '\n' >/dev/tty
-  printf -v "$variable_name" '%s' "$value"
+  printf -v "$variable_name" '%s' "$_bedolaga_tty_input"
 }
 
 confirm() {

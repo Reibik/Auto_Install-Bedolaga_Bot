@@ -63,4 +63,28 @@ grep -q 'hooks.example.com' "$CADDY_FILE" || fail "webhook domain not rendered"
 grep -q 'cabinet.example.com' "$CADDY_FILE" || fail "cabinet domain not rendered"
 ! grep -q '@@' "$CADDY_FILE" || fail "template placeholder remains"
 
+# Проверяем передачу введённого значения из функций чтения в переменную вызывающего кода.
+# util-linux script создаёт настоящий псевдотерминал, включая скрытый режим read -s.
+if command_exists script; then
+  export BEDOLAGA_TEST_PROJECT_ROOT="$PROJECT_ROOT"
+  tty_probe="$TEST_ROOT/tty-probe.sh"
+  cat >"$tty_probe" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+export BEDOLAGA_LIB_ROOT="$BEDOLAGA_TEST_PROJECT_ROOT"
+# shellcheck disable=SC1091
+source "$BEDOLAGA_TEST_PROJECT_ROOT/lib/common.sh"
+value=''
+read_tty value ''
+printf 'VISIBLE_RESULT=%s\n' "$value"
+value=''
+read_secret_tty value ''
+printf 'SECRET_RESULT=%s\n' "$value"
+EOF
+  chmod 700 "$tty_probe"
+  tty_output="$(printf 'visible-input\nsecret-input\n' | script -qec "bash '$tty_probe'" /dev/null | tr -d '\r')"
+  grep -q '^VISIBLE_RESULT=visible-input$' <<<"$tty_output" || fail "read_tty lost caller value"
+  grep -q '^SECRET_RESULT=secret-input$' <<<"$tty_output" || fail "read_secret_tty lost caller value"
+fi
+
 printf 'Smoke tests passed.\n'
