@@ -2,7 +2,7 @@
 
 # 🚀 Bedolaga Auto Installer
 
-### Установка и управление Bedolaga Bot + Cabinet одной командой
+### Bedolaga Bot + Cabinet + Xray Checker + Status Page одной командой
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Reibik/Auto_Install-Bedolaga_Bot/ci.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI)](https://github.com/Reibik/Auto_Install-Bedolaga_Bot/actions/workflows/ci.yml)
 [![Security](https://img.shields.io/github/actions/workflow/status/Reibik/Auto_Install-Bedolaga_Bot/security.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=Security)](https://github.com/Reibik/Auto_Install-Bedolaga_Bot/actions/workflows/security.yml)
@@ -15,7 +15,7 @@
 
 </div>
 
-![Пример работы установщика Bedolaga Manager](docs/assets/bedolaga-installer.png)
+![Bedolaga Manager — Bot, Cabinet, Xray Checker и Status Page](docs/assets/bedolaga-stack-preview.png)
 
 > [!NOTE]
 > **Bedolaga Manager** разворачивает [Bedolaga Bot](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot), [Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet), PostgreSQL, Redis и Caddy. По желанию тот же мастер устанавливает [Xray Checker](https://github.com/kutovoys/xray-checker) и [Xray Checker Status Page](https://github.com/Mrvibecodic/xray-checker-statuspage/tree/go-build).
