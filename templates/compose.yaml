@@ -137,6 +137,61 @@ services:
     logging: *default-logging
     labels: *managed-labels
 
+  xray-statuspage:
+    profiles: [xray-monitoring]
+    image: bedolaga/xray-checker-statuspage:local
+    build:
+      context: ${XRAY_STATUS_SOURCE_DIR}
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${XRAY_STATUS_VERSION:-go-build}
+    restart: unless-stopped
+    environment:
+      BOT_TOKEN: "${XRAY_STATUS_BOT_TOKEN:-}"
+      BOT_ADMIN_IDS: "${XRAY_STATUS_ADMIN_IDS:-}"
+      CHECKER_URL: http://127.0.0.1:2112
+      SUBSCRIPTION_URL: "${XRAY_SUBSCRIPTION_URL:-}"
+      TZ: "${TZ:-Europe/Moscow}"
+      TITLE: "${XRAY_STATUS_TITLE:-Статус серверов}"
+      DOMAIN: "${XRAY_STATUS_DOMAIN:-}"
+      PORT: "8080"
+      INTERNAL_PORT: "8081"
+      TLS_MODE: "off"
+    volumes:
+      - ${DATA_ROOT}/xray-statuspage:/data
+    networks:
+      - edge
+    logging: *default-logging
+    labels: *managed-labels
+
+  xray-checker:
+    profiles: [xray-monitoring]
+    image: "${XRAY_CHECKER_IMAGE:-kutovoys/xray-checker:latest}"
+    restart: unless-stopped
+    network_mode: service:xray-statuspage
+    depends_on:
+      xray-statuspage:
+        condition: service_started
+    environment:
+      SUBSCRIPTION_URL: http://127.0.0.1:8081/sub
+      SUBSCRIPTION_UPDATE: "true"
+      SUBSCRIPTION_UPDATE_INTERVAL: "${XRAY_CHECK_INTERVAL:-300}"
+      SUBSCRIPTION_JSON_FORMAT: "true"
+      PROXY_CHECK_INTERVAL: "${XRAY_CHECK_INTERVAL:-300}"
+      METRICS_HOST: 0.0.0.0
+      METRICS_PORT: "2112"
+      METRICS_PROTECTED: "false"
+      WEB_PUBLIC: "false"
+      TZ: "${TZ:-Europe/Moscow}"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:2112/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging: *default-logging
+    labels: *managed-labels
+
 networks:
   backend:
     internal: true

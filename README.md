@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/github/license/Reibik/Auto_Install-Bedolaga_Bot?style=for-the-badge&color=7c3aed)](LICENSE)
 [![Shell](https://img.shields.io/badge/Shell-Bash-22c55e?style=for-the-badge&logo=gnubash&logoColor=white)](https://www.gnu.org/software/bash/)
 
-**Автоматическая установка · HTTPS · Обновления · Откат · Бэкапы · Диагностика**
+**Автоматическая установка · Xray Monitoring · HTTPS · Обновления · Бэкапы · Диагностика**
 
 [Быстрый старт](#quick-start) · [Возможности](#features) · [Управление](#management) · [Архитектура](#architecture) · [Поддержка](#support)
 
@@ -18,7 +18,7 @@
 ![Пример работы установщика Bedolaga Manager](docs/assets/bedolaga-installer.png)
 
 > [!NOTE]
-> **Bedolaga Manager** разворачивает [Bedolaga Bot](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot), [Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet), PostgreSQL, Redis и Caddy, а затем управляет всем стеком через единую команду `bedolaga`.
+> **Bedolaga Manager** разворачивает [Bedolaga Bot](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot), [Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet), PostgreSQL, Redis и Caddy. По желанию тот же мастер устанавливает [Xray Checker](https://github.com/kutovoys/xray-checker) и [Xray Checker Status Page](https://github.com/Mrvibecodic/xray-checker-statuspage/tree/go-build).
 
 ---
 
@@ -35,6 +35,7 @@
 | 💾 | **Резервные копии** | PostgreSQL, конфигурация и данные с SHA-256 проверкой целостности |
 | 🩺 | **Встроенная диагностика** | Проверка DNS, HTTPS, API, Docker Compose и состояния контейнеров |
 | 🛡️ | **Безопасная сеть** | Наружу открыты только веб-порты, PostgreSQL и Redis изолированы |
+| 📡 | **Опциональный Xray Monitoring** | Проверка прокси, публичная Status Page и отдельный Telegram-бот управления |
 
 ---
 
@@ -71,6 +72,7 @@ bedolaga
 - Telegram ID администратора или администраторов;
 - URL и API key работающей Remnawave Panel;
 - email для выпуска Let's Encrypt сертификатов.
+- для опционального Xray Monitoring: ещё один домен и URL VPN-подписки.
 
 </details>
 
@@ -84,6 +86,9 @@ bedolaga
 3. Домены Telegram webhook и Cabinet.
 4. Email для Let's Encrypt.
 5. Название проекта, короткий логотип и часовой пояс.
+6. Нужно ли установить Xray Checker + Status Page.
+
+Если включить Xray Monitoring, мастер дополнительно запросит отдельный домен, URL одной или нескольких подписок, интервал проверок и, по желанию, токен **отдельного** Telegram-бота Status Page. Использовать токен основного Bedolaga Bot нельзя: основной бот работает через webhook, а Status Page использует собственный Telegram control plane.
 
 Username бота определяется автоматически через Telegram API. Пароли PostgreSQL, JWT и служебные секреты генерируются локально.
 
@@ -125,7 +130,14 @@ NO_COLOR=1 BEDOLAGA_EMOJI=0 bedolaga
 | `bedolaga config paths` | Показать расположение всех файлов конфигурации |
 | `bedolaga apply` | Применить `.env`, Caddy и branding |
 | `bedolaga versions` | Сравнить локальные и доступные версии |
-| `bedolaga update [all\|bot\|cabinet]` | Обновить весь проект или компонент |
+| `bedolaga update [all\|bot\|cabinet\|xray]` | Обновить весь проект или компонент |
+| `bedolaga xray` | Открыть красивое меню Xray Monitoring |
+| `bedolaga xray install` | Установить или перенастроить Xray Checker + Status Page |
+| `bedolaga xray status` | Показать состояние, домен, интервал и используемые образы |
+| `bedolaga xray logs [checker\|statuspage]` | Открыть логи модуля |
+| `bedolaga xray update` | Обновить Checker и исходники Status Page с автоматическим откатом |
+| `bedolaga xray disable` | Отключить модуль с сохранением настроек и данных |
+| `bedolaga xray remove --purge-data` | Полностью удалить модуль и его данные |
 | `bedolaga rollback` | Откатить последнее обновление приложений |
 | `bedolaga backup` | Создать резервную копию |
 | `bedolaga backup-list` | Показать доступные копии |
@@ -134,7 +146,27 @@ NO_COLOR=1 BEDOLAGA_EMOJI=0 bedolaga
 | `bedolaga firewall enable` | Настроить UFW для SSH, HTTP и HTTPS |
 | `bedolaga self-update` | Обновить Bedolaga Manager |
 
-Доступные сервисы для `logs` и `restart`: `bot`, `cabinet`, `caddy`, `postgres`, `redis`.
+Доступные сервисы для `logs` и `restart`: `bot`, `cabinet`, `caddy`, `postgres`, `redis`, а при включённом модуле — `xray-statuspage` и `xray-checker`.
+
+<details>
+<summary><strong>📡 Как устроен Xray Monitoring</strong></summary>
+
+- модуль выключен по умолчанию и никак не влияет на Bot/Cabinet;
+- Xray Checker получает подписки через внутренний endpoint Status Page;
+- оба сервиса используют общее изолированное сетевое пространство, необходимое upstream-проекту для связи через `localhost`;
+- порты `2112`, `8080`, `8081` и диапазон Xray не публикуются на host;
+- пользователи открывают Status Page только по отдельному HTTPS-домену через Caddy;
+- Status Page собирается из официальной ветки `go-build`, поэтому установка работает на AMD64 и ARM64;
+- база, ключ шифрования и настройки Status Page хранятся в `/var/lib/bedolaga/xray-statuspage` и входят в бэкапы Manager.
+
+Для уже работающей установки сначала обновите Manager, затем запустите:
+
+```bash
+bedolaga self-update
+bedolaga xray install
+```
+
+</details>
 
 > [!TIP]
 > После изменения конфигурации используйте `bedolaga apply`. Обычный `restart` не перечитывает переменные окружения уже созданного контейнера.
@@ -155,11 +187,15 @@ flowchart TD
     BotAPI --> PostgreSQL[(🐘 PostgreSQL)]
     BotAPI --> Redis[(⚡ Redis)]
     BotAPI --> Remnawave[☁️ Remnawave API]
+    Caddy -->|status.example.com| StatusPage[📊 Xray Status Page]
+    StatusPage <-->|localhost| Checker[📡 Xray Checker]
+    Checker --> Subscriptions[🔗 VPN subscriptions]
 ```
 
 - наружу публикуются только `80/TCP`, `443/TCP` и `443/UDP`;
 - PostgreSQL и Redis находятся во внутренней Docker-сети;
 - Bot и Cabinet не публикуют host-порты напрямую;
+- опциональные Xray Checker и Status Page также не публикуют host-порты;
 - Caddy автоматически получает и продлевает TLS-сертификаты;
 - управляемые Docker-ресурсы получают label `dev.reibik.bedolaga.managed=true`.
 
@@ -177,6 +213,8 @@ flowchart TD
 4. Собирает новые Docker-образы до перезапуска сервисов.
 5. Запускает стек и ожидает успешные health checks.
 6. При ошибке автоматически возвращает предыдущие версии приложений.
+
+Если Xray Monitoring включён, `bedolaga update all` также создаёт бэкап, обновляет официальный image Checker и detached checkout ветки `go-build`. При неудачной сборке или health check Manager возвращает предыдущий commit Status Page и прежний image Checker.
 
 Ручной откат:
 
@@ -196,6 +234,7 @@ bedolaga rollback
 - дамп PostgreSQL в custom format;
 - `stack.env`, `bot.env` и Caddyfile;
 - постоянные данные, uploads и локали Bot;
+- база, настройки и зашифрованные подписки Xray Status Page;
 - версии Manager, Bot и Cabinet;
 - SHA-256 checksum для проверки целостности.
 
@@ -225,10 +264,12 @@ bedolaga rollback
 /opt/bedolaga/compose.yaml              управляемый Docker Compose
 /opt/bedolaga/sources/bot/              исходный код Bot
 /opt/bedolaga/sources/cabinet/          исходный код Cabinet
+/opt/bedolaga/sources/xray-statuspage/  ветка go-build опциональной Status Page
 /etc/bedolaga/stack.env                 параметры Compose
 /etc/bedolaga/bot.env                   конфигурация Bot
 /etc/bedolaga/Caddyfile                 reverse proxy
 /var/lib/bedolaga/bot/                  постоянные данные Bot
+/var/lib/bedolaga/xray-statuspage/      данные опциональной Status Page
 /var/lib/bedolaga/backups/              резервные копии
 /var/lib/bedolaga/state/                состояние обновлений
 ```
@@ -265,6 +306,7 @@ bash -n bedolaga install.sh tests/*.sh lib/*.sh
 shellcheck -x bedolaga install.sh tests/*.sh lib/*.sh
 bash tests/smoke.sh
 bash tests/lifecycle.sh
+bash tests/xray.sh
 bash tests/ui.sh
 ```
 
@@ -297,12 +339,14 @@ CI дополнительно проверяет итоговый Docker Compose
 - [BEDOLAGA-DEV / remnawave-bedolaga-telegram-bot](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot)
 - [BEDOLAGA-DEV / bedolaga-cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet)
 - [Документация Bedolaga](https://bedolagadev.mintlify.app/introduction)
+- [kutovoys / xray-checker](https://github.com/kutovoys/xray-checker)
+- [Mrvibecodic / xray-checker-statuspage (go-build)](https://github.com/Mrvibecodic/xray-checker-statuspage/tree/go-build)
 
 ---
 
 ## 📄 Лицензия
 
-Bedolaga Auto Installer распространяется по лицензии [MIT](LICENSE). Bedolaga Bot и Bedolaga Cabinet распространяются их авторами на условиях собственных лицензий.
+Bedolaga Auto Installer распространяется по лицензии [MIT](LICENSE). Устанавливаемые upstream-сервисы распространяются их авторами на условиях собственных лицензий.
 
 <div align="center">
 

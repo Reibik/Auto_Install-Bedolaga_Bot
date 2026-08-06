@@ -51,7 +51,11 @@ tar -xzf "$archive" -C "$temporary_root"
 
 source_root="$(find "$temporary_root" -mindepth 1 -maxdepth 1 -type d -print -quit)"
 [[ -x "$source_root/bedolaga" || -f "$source_root/bedolaga" ]] || { printf 'В архиве отсутствует bedolaga.\n' >&2; exit 1; }
-[[ -f "$source_root/lib/common.sh" && -f "$source_root/lib/ui.sh" && -f "$source_root/templates/compose.yaml" ]] || { printf 'Архив Manager неполный.\n' >&2; exit 1; }
+[[ -f "$source_root/lib/common.sh" && -f "$source_root/lib/ui.sh" && -f "$source_root/lib/xray.sh" \
+  && -f "$source_root/templates/compose.yaml" && -f "$source_root/templates/Caddyfile.xray.tmpl" ]] || {
+  printf 'Архив Manager неполный.\n' >&2
+  exit 1
+}
 if ! bash -n "$source_root/bedolaga" "$source_root/install.sh" "$source_root"/lib/*.sh; then
   printf 'Архив Manager содержит синтаксически некорректные скрипты.\n' >&2
   exit 1

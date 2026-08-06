@@ -10,6 +10,27 @@ validate_https_url() {
   [[ "$value" =~ ^https://[^[:space:]/]+(/[^[:space:]]*)?$ ]]
 }
 
+validate_https_url_list() {
+  local raw="$1" item
+  local -a urls=()
+  IFS=',' read -r -a urls <<<"$raw"
+  [[ "${#urls[@]}" -gt 0 ]] || return 1
+  for item in "${urls[@]}"; do
+    item="${item#"${item%%[![:space:]]*}"}"
+    item="${item%"${item##*[![:space:]]}"}"
+    validate_https_url "$item" || return 1
+  done
+}
+
+validate_check_interval() {
+  [[ "$1" =~ ^[0-9]+$ ]] || return 1
+  ((10#$1 >= 30 && 10#$1 <= 86400))
+}
+
+validate_image_reference() {
+  [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._/:@-]{1,254}$ ]]
+}
+
 validate_bot_token() {
   [[ "$1" =~ ^[0-9]{6,}:[A-Za-z0-9_-]{20,}$ ]]
 }
@@ -269,7 +290,7 @@ write_required_configuration() {
 
 render_caddyfile() {
   load_stack_env || die "Не удалось загрузить $STACK_ENV"
-  local template
+  local template xray_template
   : "${ACME_EMAIL:?}" "${WEBHOOK_DOMAIN:?}" "${CABINET_DOMAIN:?}"
   template="$(template_dir)/Caddyfile.tmpl"
   [[ -f "$template" ]] || die "Не найден шаблон $template"
@@ -278,6 +299,12 @@ render_caddyfile() {
     -e "s|@@WEBHOOK_DOMAIN@@|${WEBHOOK_DOMAIN}|g" \
     -e "s|@@CABINET_DOMAIN@@|${CABINET_DOMAIN}|g" \
     "$template" >"${CADDY_FILE}.tmp"
+  if xray_monitoring_enabled; then
+    : "${XRAY_STATUS_DOMAIN:?}"
+    xray_template="$(template_dir)/Caddyfile.xray.tmpl"
+    [[ -f "$xray_template" ]] || die "Не найден шаблон $xray_template"
+    sed -e "s|@@XRAY_STATUS_DOMAIN@@|${XRAY_STATUS_DOMAIN}|g" "$xray_template" >>"${CADDY_FILE}.tmp"
+  fi
   chmod 600 "${CADDY_FILE}.tmp"
   mv -f "${CADDY_FILE}.tmp" "$CADDY_FILE"
 }
@@ -358,6 +385,22 @@ validate_stack_values() {
   [[ -z "${VITE_APP_NAME:-}" ]] || validate_app_name "$VITE_APP_NAME" || { error "Некорректный VITE_APP_NAME."; return 1; }
   [[ -z "${VITE_APP_LOGO:-}" ]] || validate_logo "$VITE_APP_LOGO" || { error "Некорректный VITE_APP_LOGO."; return 1; }
   [[ -z "${TZ:-}" ]] || validate_timezone "$TZ" || { error "Некорректный TZ."; return 1; }
+  if [[ "${XRAY_MONITORING_ENABLED:-false}" == true ]]; then
+    validate_domain "${XRAY_STATUS_DOMAIN:-}" || { error "Некорректный XRAY_STATUS_DOMAIN."; return 1; }
+    [[ "$XRAY_STATUS_DOMAIN" != "$WEBHOOK_DOMAIN" && "$XRAY_STATUS_DOMAIN" != "$CABINET_DOMAIN" ]] || {
+      error "Status Page, Webhook и Cabinet должны использовать разные домены."
+      return 1
+    }
+    validate_https_url_list "${XRAY_SUBSCRIPTION_URL:-}" || { error "Некорректный XRAY_SUBSCRIPTION_URL."; return 1; }
+    validate_check_interval "${XRAY_CHECK_INTERVAL:-}" || { error "XRAY_CHECK_INTERVAL должен быть от 30 до 86400 секунд."; return 1; }
+    validate_image_reference "${XRAY_CHECKER_IMAGE:-}" || { error "Некорректный XRAY_CHECKER_IMAGE."; return 1; }
+    [[ "${XRAY_STATUS_REF:-}" == go-build ]] || { error "XRAY_STATUS_REF должен быть go-build."; return 1; }
+    [[ -z "${XRAY_STATUS_BOT_TOKEN:-}" ]] || validate_bot_token "$XRAY_STATUS_BOT_TOKEN" || { error "Некорректный XRAY_STATUS_BOT_TOKEN."; return 1; }
+    [[ -z "${XRAY_STATUS_BOT_TOKEN:-}" ]] || validate_admin_ids "${XRAY_STATUS_ADMIN_IDS:-}" || { error "Некорректный XRAY_STATUS_ADMIN_IDS."; return 1; }
+  elif [[ "${XRAY_MONITORING_ENABLED:-false}" != false ]]; then
+    error "XRAY_MONITORING_ENABLED должен быть true или false."
+    return 1
+  fi
 }
 
 validate_bot_values() {
@@ -373,9 +416,10 @@ validate_bot_values() {
 }
 
 validate_managed_paths() {
-  local configured_bot configured_cabinet configured_config configured_data configured_bot_env configured_db configured_user
+  local configured_bot configured_cabinet configured_xray_status configured_config configured_data configured_bot_env configured_db configured_user
   configured_bot="$(dotenv_get "$STACK_ENV" BOT_SOURCE_DIR 2>/dev/null || true)"
   configured_cabinet="$(dotenv_get "$STACK_ENV" CABINET_SOURCE_DIR 2>/dev/null || true)"
+  configured_xray_status="$(dotenv_get "$STACK_ENV" XRAY_STATUS_SOURCE_DIR 2>/dev/null || true)"
   configured_config="$(dotenv_get "$STACK_ENV" CONFIG_ROOT 2>/dev/null || true)"
   configured_data="$(dotenv_get "$STACK_ENV" DATA_ROOT 2>/dev/null || true)"
   configured_bot_env="$(dotenv_get "$STACK_ENV" BOT_ENV 2>/dev/null || true)"
@@ -383,6 +427,9 @@ validate_managed_paths() {
   configured_user="$(dotenv_get "$STACK_ENV" POSTGRES_USER 2>/dev/null || true)"
   [[ "$configured_bot" == "$BOT_SOURCE_DIR" ]] || { error "BOT_SOURCE_DIR должен быть $BOT_SOURCE_DIR"; return 1; }
   [[ "$configured_cabinet" == "$CABINET_SOURCE_DIR" ]] || { error "CABINET_SOURCE_DIR должен быть $CABINET_SOURCE_DIR"; return 1; }
+  if xray_monitoring_enabled; then
+    [[ "$configured_xray_status" == "$XRAY_STATUS_SOURCE_DIR" ]] || { error "XRAY_STATUS_SOURCE_DIR должен быть $XRAY_STATUS_SOURCE_DIR"; return 1; }
+  fi
   [[ "$configured_config" == "$CONFIG_ROOT" ]] || { error "CONFIG_ROOT должен быть $CONFIG_ROOT"; return 1; }
   [[ "$configured_data" == "$DATA_ROOT" ]] || { error "DATA_ROOT должен быть $DATA_ROOT"; return 1; }
   [[ "$configured_bot_env" == "$BOT_ENV" ]] || { error "BOT_ENV должен быть $BOT_ENV"; return 1; }
@@ -398,5 +445,9 @@ validate_configuration() {
   validate_stack_values || return 1
   validate_bot_values || return 1
   validate_managed_paths || return 1
-  docker compose --project-name bedolaga --env-file "$STACK_ENV" -f "$COMPOSE_FILE" config --quiet
+  if xray_monitoring_enabled; then
+    dotenv_require "$STACK_ENV" XRAY_STATUS_DOMAIN XRAY_SUBSCRIPTION_URL XRAY_CHECK_INTERVAL \
+      XRAY_CHECKER_IMAGE XRAY_STATUS_SOURCE_DIR XRAY_STATUS_REF || return 1
+  fi
+  compose config --quiet
 }

@@ -43,7 +43,7 @@ check_cors_configuration() {
 
 doctor() {
   require_root
-  local failures=0 webhook_domain cabinet_domain
+  local failures=0 webhook_domain cabinet_domain xray_status_domain
   ui_banner 'Комплексная диагностика'
   ui_section 'Проверки'
   doctor_check "Docker daemon" docker info || ((failures += 1))
@@ -56,18 +56,22 @@ doctor() {
   if load_stack_env; then
     webhook_domain="${WEBHOOK_DOMAIN:-}"
     cabinet_domain="${CABINET_DOMAIN:-}"
+    xray_status_domain="${XRAY_STATUS_DOMAIN:-}"
     if [[ -n "$webhook_domain" ]]; then
       doctor_check "DNS webhook: $webhook_domain" dns_ipv4 "$webhook_domain" || ((failures += 1))
     fi
     if [[ -n "$cabinet_domain" ]]; then
       doctor_check "DNS Cabinet: $cabinet_domain" dns_ipv4 "$cabinet_domain" || ((failures += 1))
     fi
+    if xray_monitoring_enabled && [[ -n "$xray_status_domain" ]]; then
+      doctor_check "DNS Xray Status Page: $xray_status_domain" dns_ipv4 "$xray_status_domain" || ((failures += 1))
+    fi
   fi
 
   local service
-  for service in postgres redis bot cabinet caddy; do
+  while IFS= read -r service; do
     doctor_check "Контейнер $service: $(service_state "$service" 2>/dev/null || true)" service_state "$service" || ((failures += 1))
-  done
+  done < <(managed_services)
 
   if [[ -n "${webhook_domain:-}" ]]; then
     doctor_check "HTTPS webhook" check_https_url "https://${webhook_domain}/health" || ((failures += 1))
@@ -75,6 +79,9 @@ doctor() {
   if [[ -n "${cabinet_domain:-}" ]]; then
     doctor_check "HTTPS Cabinet" check_https_url "https://${cabinet_domain}/" || ((failures += 1))
     doctor_check "Маршрут Cabinet API" check_https_url "https://${cabinet_domain}/api/health" || ((failures += 1))
+  fi
+  if xray_monitoring_enabled && [[ -n "${xray_status_domain:-}" ]]; then
+    doctor_check "HTTPS Xray Status Page" check_https_url "https://${xray_status_domain}/healthz" || ((failures += 1))
   fi
   doctor_check "Telegram webhook зарегистрирован" check_telegram_webhook || ((failures += 1))
   doctor_check "CORS соответствует домену Cabinet" check_cors_configuration || ((failures += 1))
@@ -86,6 +93,6 @@ doctor() {
     return 0
   fi
   error "Обнаружено проблем: $failures"
-  ui_hint "Подробные логи: bedolaga logs <bot|cabinet|caddy>"
+  ui_hint "Подробные логи: bedolaga logs <service> или bedolaga xray logs"
   return 1
 }

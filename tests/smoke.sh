@@ -65,6 +65,11 @@ dotenv_unset "$BOT_ENV" LOG_ROTATION_TOPIC_ID
 validate_domain "cabinet.example.com" || fail "valid domain rejected"
 ! validate_domain "https://cabinet.example.com" || fail "invalid domain accepted"
 validate_https_url "https://panel.example.com/api" || fail "valid URL rejected"
+validate_https_url_list "https://one.example.com/sub,https://two.example.com/sub" || fail "valid URL list rejected"
+! validate_https_url_list "https://one.example.com/sub,http://unsafe.example.com/sub" || fail "unsafe URL list accepted"
+validate_check_interval 300 || fail "valid check interval rejected"
+! validate_check_interval 10 || fail "too short check interval accepted"
+validate_image_reference "ghcr.io/example/service:latest" || fail "valid image reference rejected"
 validate_bot_token "1234567:abcdefghijklmnopqrstuvwxyz_123456" || fail "valid token rejected"
 validate_admin_ids "123,456" || fail "valid admin IDs rejected"
 ! validate_admin_ids "123,abc" || fail "invalid admin IDs accepted"
@@ -110,16 +115,48 @@ dotenv_set "$STACK_ENV" ACME_EMAIL "admin@example.com"
 dotenv_set "$STACK_ENV" WEBHOOK_DOMAIN "hooks.example.com"
 dotenv_set "$STACK_ENV" CABINET_DOMAIN "cabinet.example.com"
 dotenv_set "$STACK_ENV" VITE_TELEGRAM_BOT_USERNAME "test_bot"
+dotenv_set "$STACK_ENV" XRAY_MONITORING_ENABLED false
 render_caddyfile
 grep -q 'hooks.example.com' "$CADDY_FILE" || fail "webhook domain not rendered"
 grep -q 'cabinet.example.com' "$CADDY_FILE" || fail "cabinet domain not rendered"
 ! grep -q '@@' "$CADDY_FILE" || fail "template placeholder remains"
+! grep -q 'status.example.com' "$CADDY_FILE" || fail "disabled Xray route was rendered"
 validate_stack_values || fail "valid stack values rejected"
 dotenv_set "$STACK_ENV" CABINET_DOMAIN "hooks.example.com"
 if validate_stack_values >/dev/null 2>&1; then
   fail "identical webhook and Cabinet domains accepted"
 fi
 dotenv_set "$STACK_ENV" CABINET_DOMAIN "cabinet.example.com"
+
+dotenv_set "$STACK_ENV" XRAY_MONITORING_ENABLED true
+dotenv_set "$STACK_ENV" XRAY_STATUS_DOMAIN "status.example.com"
+dotenv_set "$STACK_ENV" XRAY_SUBSCRIPTION_URL "https://panel.example.com/sub/secret"
+dotenv_set "$STACK_ENV" XRAY_CHECK_INTERVAL "300"
+dotenv_set "$STACK_ENV" XRAY_STATUS_BOT_TOKEN ""
+dotenv_set "$STACK_ENV" XRAY_STATUS_ADMIN_IDS ""
+dotenv_set "$STACK_ENV" XRAY_CHECKER_IMAGE "kutovoys/xray-checker:latest"
+dotenv_set "$STACK_ENV" XRAY_STATUS_SOURCE_DIR "$XRAY_STATUS_SOURCE_DIR"
+dotenv_set "$STACK_ENV" XRAY_STATUS_REF "go-build"
+dotenv_set "$STACK_ENV" XRAY_STATUS_VERSION "go-build-test"
+render_caddyfile
+grep -q 'status.example.com' "$CADDY_FILE" || fail "enabled Xray route was not rendered"
+grep -q 'reverse_proxy xray-statuspage:8080' "$CADDY_FILE" || fail "Xray reverse proxy was not rendered"
+validate_stack_values || fail "valid Xray settings rejected"
+mapfile -t active_services < <(managed_services)
+[[ " ${active_services[*]} " == *' xray-statuspage '* && " ${active_services[*]} " == *' xray-checker '* ]] || fail "Xray services are not active"
+copy_compose_template
+docker() { printf '%s\n' "$*"; }
+compose_args="$(compose config --quiet)"
+[[ "$compose_args" == *'--profile xray-monitoring'* ]] || fail "Xray Compose profile was not enabled"
+dotenv_set "$STACK_ENV" XRAY_STATUS_DOMAIN "cabinet.example.com"
+if validate_stack_values >/dev/null 2>&1; then
+  fail "duplicate Xray Status Page domain accepted"
+fi
+dotenv_set "$STACK_ENV" XRAY_STATUS_DOMAIN "status.example.com"
+dotenv_set "$STACK_ENV" XRAY_MONITORING_ENABLED false
+compose_args="$(compose config --quiet)"
+[[ "$compose_args" != *'--profile xray-monitoring'* ]] || fail "disabled Xray Compose profile was enabled"
+dotenv_set "$STACK_ENV" XRAY_MONITORING_ENABLED true
 
 dotenv_set "$BOT_ENV" BOT_TOKEN "1234567:abcdefghijklmnopqrstuvwxyz_123456"
 dotenv_set "$BOT_ENV" ADMIN_IDS "123,456"

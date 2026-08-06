@@ -132,7 +132,7 @@ ui_service_row() {
     not-created) icon='stopped'; state_text='Не создан' ;;
     *) icon='stopped' ;;
   esac
-  printf '  %s  %-12s %s\n' "$(ui_icon "$icon")" "$service" "$state_text"
+  printf '  %s  %-16s %s\n' "$(ui_icon "$icon")" "$service" "$state_text"
 }
 
 ui_step() {
@@ -157,7 +157,7 @@ ui_hint() {
 }
 
 ui_install_success() {
-  local bot_username="$1" cabinet_url="$2" webhook_url="$3" backup_status="${4:-Включены}"
+  local bot_username="$1" cabinet_url="$2" webhook_url="$3" backup_status="${4:-Включены}" xray_url="${5:-}"
   printf '\n'
   if [[ "$UI_UNICODE_ENABLED" -eq 1 ]]; then
     printf '%b╭──%b %s %bBEDOLAGA УСПЕШНО УСТАНОВЛЕНА%b\n' "$C_GREEN" "$C_RESET" "$(ui_icon party)" "$C_BOLD" "$C_RESET"
@@ -170,6 +170,7 @@ ui_install_success() {
   ui_key_value bot 'Telegram Bot' "@${bot_username}"
   ui_key_value globe 'Cabinet' "$cabinet_url"
   ui_key_value webhook 'Webhook' "$webhook_url"
+  [[ -z "$xray_url" ]] || ui_key_value status 'Xray Status' "$xray_url"
   ui_key_value lock 'HTTPS' 'Активен'
   ui_key_value backup 'Автобэкапы' "$backup_status"
   printf '\n  Команда управления: %bbedolaga%b\n' "$C_BOLD" "$C_RESET"

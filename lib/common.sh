@@ -7,10 +7,11 @@ BEDOLAGA_COMMON_LOADED=1
 
 # Переменные ниже используются другими файлами после source.
 # shellcheck disable=SC2034
-readonly BEDOLAGA_VERSION="1.1.1"
+readonly BEDOLAGA_VERSION="1.2.0"
 readonly BEDOLAGA_REPOSITORY="${BEDOLAGA_REPOSITORY:-Reibik/Auto_Install-Bedolaga_Bot}"
 readonly BOT_REPOSITORY="${BOT_REPOSITORY:-https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot.git}"
 readonly CABINET_REPOSITORY="${CABINET_REPOSITORY:-https://github.com/BEDOLAGA-DEV/bedolaga-cabinet.git}"
+readonly XRAY_STATUS_REPOSITORY="${XRAY_STATUS_REPOSITORY:-https://github.com/Mrvibecodic/xray-checker-statuspage.git}"
 
 # shellcheck disable=SC2034
 INSTALL_ROOT="${BEDOLAGA_INSTALL_ROOT:-/opt/bedolaga}"
@@ -20,6 +21,7 @@ BACKUP_ROOT="${BEDOLAGA_BACKUP_ROOT:-${DATA_ROOT}/backups}"
 SOURCE_ROOT="${INSTALL_ROOT}/sources"
 BOT_SOURCE_DIR="${SOURCE_ROOT}/bot"
 CABINET_SOURCE_DIR="${SOURCE_ROOT}/cabinet"
+XRAY_STATUS_SOURCE_DIR="${SOURCE_ROOT}/xray-statuspage"
 COMPOSE_FILE="${INSTALL_ROOT}/compose.yaml"
 CADDY_FILE="${CONFIG_ROOT}/Caddyfile"
 STACK_ENV="${CONFIG_ROOT}/stack.env"
@@ -49,7 +51,7 @@ fi
 
 # Эти значения намеренно объявлены в общем модуле и используются после source
 # другими модулями менеджера.
-: "$BEDOLAGA_VERSION" "$BOT_SOURCE_DIR" "$CABINET_SOURCE_DIR" "$CADDY_FILE" "$BOT_ENV" "$UPDATE_STATE" "$C_CYAN" "$C_BOLD"
+: "$BEDOLAGA_VERSION" "$BOT_SOURCE_DIR" "$CABINET_SOURCE_DIR" "$XRAY_STATUS_SOURCE_DIR" "$CADDY_FILE" "$BOT_ENV" "$UPDATE_STATE" "$C_CYAN" "$C_BOLD"
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S'; }
 
@@ -86,7 +88,23 @@ template_dir() {
 compose() {
   [[ -f "$COMPOSE_FILE" ]] || die "Не найден $COMPOSE_FILE. Сначала выполните bedolaga install."
   [[ -f "$STACK_ENV" ]] || die "Не найден $STACK_ENV. Сначала выполните bedolaga install."
-  docker compose --project-name bedolaga --env-file "$STACK_ENV" -f "$COMPOSE_FILE" "$@"
+  local -a profile_args=()
+  if xray_monitoring_enabled; then
+    profile_args=(--profile xray-monitoring)
+  fi
+  docker compose --project-name bedolaga --env-file "$STACK_ENV" -f "$COMPOSE_FILE" "${profile_args[@]}" "$@"
+}
+
+xray_monitoring_enabled() {
+  [[ -f "$STACK_ENV" ]] || return 1
+  [[ "$(dotenv_get "$STACK_ENV" XRAY_MONITORING_ENABLED 2>/dev/null || true)" == true ]]
+}
+
+managed_services() {
+  printf '%s\n' postgres redis bot cabinet caddy
+  if xray_monitoring_enabled; then
+    printf '%s\n' xray-statuspage xray-checker
+  fi
 }
 
 with_lock() {

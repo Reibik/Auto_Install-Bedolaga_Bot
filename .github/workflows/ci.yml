@@ -24,6 +24,7 @@ jobs:
         run: |
           bash tests/smoke.sh
           bash tests/lifecycle.sh
+          bash tests/xray.sh
           bash tests/ui.sh
       - name: Compose template
         run: |
@@ -44,8 +45,18 @@ jobs:
           WEBHOOK_DOMAIN="hooks.example.com"
           CABINET_DOMAIN="cabinet.example.com"
           ACME_EMAIL="admin@example.com"
+          XRAY_STATUS_DOMAIN="status.example.com"
+          XRAY_SUBSCRIPTION_URL="https://panel.example.com/sub/test"
+          XRAY_CHECK_INTERVAL="300"
+          XRAY_CHECKER_IMAGE="kutovoys/xray-checker:latest"
+          XRAY_STATUS_SOURCE_DIR="$temp_dir/statuspage"
+          XRAY_STATUS_REF="go-build"
+          XRAY_STATUS_VERSION="go-build-test"
           EOF
+          mkdir -p "$temp_dir/statuspage"
+          touch "$temp_dir/statuspage/Dockerfile"
           docker compose --env-file "$temp_dir/stack.env" -f templates/compose.yaml config --quiet
+          docker compose --profile xray-monitoring --env-file "$temp_dir/stack.env" -f templates/compose.yaml config --quiet
 
   compatibility:
     runs-on: ubuntu-24.04
@@ -68,4 +79,5 @@ jobs:
         run: |
           bash tests/smoke.sh
           bash tests/lifecycle.sh
+          bash tests/xray.sh
           bash tests/ui.sh

@@ -36,6 +36,8 @@ source "$BEDOLAGA_LIB_ROOT/lib/update.sh"
 source "$BEDOLAGA_LIB_ROOT/lib/doctor.sh"
 # shellcheck source=lib/security.sh
 source "$BEDOLAGA_LIB_ROOT/lib/security.sh"
+# shellcheck source=lib/xray.sh
+source "$BEDOLAGA_LIB_ROOT/lib/xray.sh"
 # shellcheck source=lib/install.sh
 source "$BEDOLAGA_LIB_ROOT/lib/install.sh"
 
@@ -51,11 +53,12 @@ usage() {
   bedolaga status                   Статус и версии контейнеров
   bedolaga start|stop|restart       Управление стеком
   bedolaga apply                    Применить .env/Caddy/branding
-  bedolaga logs [service]           Логи bot/cabinet/caddy/postgres/redis
+  bedolaga logs [service]           Логи основного стека и Xray Monitoring
   bedolaga doctor                   Диагностика DNS, HTTPS, API и контейнеров
   bedolaga config [target]          bot, stack, caddy, wizard или paths
   bedolaga versions                 Сравнить текущие и доступные commit
-  bedolaga update [component]       all, bot или cabinet
+  bedolaga update [component]       all, bot, cabinet или xray
+  bedolaga xray [action]            Установка и управление Xray Monitoring
   bedolaga rollback                 Откат последнего обновления приложений
   bedolaga backup [--automatic]     Создать резервную копию
   bedolaga backup-list              Показать резервные копии
@@ -88,17 +91,19 @@ menu_summary() {
   if [[ -f "$COMPOSE_FILE" && -f "$STACK_ENV" ]]; then
     ui_key_value package 'Bot' "$(git_short_commit "$BOT_SOURCE_DIR")"
     ui_key_value package 'Cabinet' "$(git_short_commit "$CABINET_SOURCE_DIR")"
-    for service in postgres redis bot cabinet caddy; do
+    local total=0
+    while IFS= read -r service; do
+      ((total += 1))
       state="$(service_state "$service" 2>/dev/null || true)"
       if [[ "$state" == running/healthy || "$state" == running/none ]]; then
         ((healthy += 1))
       else
         ((problems += 1))
       fi
-    done
-    if [[ "$healthy" -eq 5 ]]; then
+    done < <(managed_services)
+    if [[ "$healthy" -eq "$total" ]]; then
       ui_key_value healthy 'Состояние' 'Все сервисы работают'
-    elif [[ "$problems" -eq 5 ]]; then
+    elif [[ "$problems" -eq "$total" ]]; then
       ui_key_value stopped 'Состояние' 'Стек остановлен'
     else
       ui_key_value warning 'Состояние' "Требуют внимания: $problems"
@@ -117,6 +122,10 @@ menu_choose_service() {
   ui_menu_item 3 lock 'Caddy'
   ui_menu_item 4 package 'PostgreSQL'
   ui_menu_item 5 package 'Redis'
+  if xray_monitoring_enabled; then
+    ui_menu_item 6 status 'Xray Status Page'
+    ui_menu_item 7 doctor 'Xray Checker'
+  fi
   ui_menu_item 0 package 'Все сервисы'
   read_tty _bedolaga_service_choice "${C_CYAN}Выберите сервис [0]: ${C_RESET}"
   case "$_bedolaga_service_choice" in
@@ -125,6 +134,8 @@ menu_choose_service() {
     3) printf -v "$variable_name" '%s' caddy ;;
     4) printf -v "$variable_name" '%s' postgres ;;
     5) printf -v "$variable_name" '%s' redis ;;
+    6) xray_monitoring_enabled && printf -v "$variable_name" '%s' xray-statuspage || return 1 ;;
+    7) xray_monitoring_enabled && printf -v "$variable_name" '%s' xray-checker || return 1 ;;
     '' | 0) printf -v "$variable_name" '%s' '' ;;
     *) warn "Неизвестный сервис."; return 1 ;;
   esac
@@ -152,6 +163,7 @@ menu() {
     ui_menu_item 10 backup 'Создать резервную копию'
     ui_menu_item 11 archives 'Управление резервными копиями'
     ui_menu_item 12 rollback 'Откатить обновление'
+    ui_menu_item 13 status 'Xray Checker + Status Page'
     ui_separator
     ui_menu_item 0 exit 'Выход'
     read_tty choice "\n${C_CYAN}Выберите действие › ${C_RESET}"
@@ -192,6 +204,7 @@ menu() {
       10) bash "$BEDOLAGA_LIB_ROOT/bedolaga" backup || true ;;
       11) bash "$BEDOLAGA_LIB_ROOT/bedolaga" backup-list || true ;;
       12) bash "$BEDOLAGA_LIB_ROOT/bedolaga" rollback || true ;;
+      13) bash "$BEDOLAGA_LIB_ROOT/bedolaga" xray menu || true ;;
       0) return 0 ;;
       *) warn "Неизвестный пункт." ;;
     esac
@@ -214,7 +227,19 @@ main() {
     doctor) doctor ;;
     config) config_edit "$@" ;;
     versions) stack_versions ;;
-    update) update_components "$@" ;;
+    update)
+      if [[ "${1:-}" == xray ]]; then
+        xray_update
+      elif [[ "${1:-all}" == all ]]; then
+        update_components all
+        if xray_monitoring_enabled; then
+          xray_update
+        fi
+      else
+        update_components "$@"
+      fi
+      ;;
+    xray) xray_manage "$@" ;;
     rollback) rollback_last_update ;;
     backup)
       if [[ "${1:-}" == "--automatic" ]]; then

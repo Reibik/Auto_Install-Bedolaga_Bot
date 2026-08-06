@@ -139,13 +139,16 @@ service_state() {
   [[ "$state" == running && "$health" != unhealthy ]]
 }
 
-wait_for_health() {
+wait_for_services() {
   local timeout="${1:-240}"
+  shift || true
   local started service state all_healthy
+  local -a services=("$@")
+  [[ "${#services[@]}" -gt 0 ]] || return 0
   started="$(date +%s)"
   while true; do
     all_healthy=1
-    for service in postgres redis bot cabinet caddy; do
+    for service in "${services[@]}"; do
       state="$(service_state "$service" 2>/dev/null || true)"
       if [[ "$state" != running/healthy && "$state" != running/none ]]; then
         all_healthy=0
@@ -157,4 +160,11 @@ wait_for_health() {
     fi
     sleep 5
   done
+}
+
+wait_for_health() {
+  local timeout="${1:-240}"
+  local -a services=()
+  mapfile -t services < <(managed_services)
+  wait_for_services "$timeout" "${services[@]}"
 }

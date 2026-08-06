@@ -26,6 +26,11 @@ install_stack() {
 
   ui_progress 4 7 'Интерактивная настройка'
   configuration_wizard
+  xray_offer_during_install
+  if xray_monitoring_enabled; then
+    mkdir -p "$DATA_ROOT/xray-statuspage"
+    chmod 700 "$DATA_ROOT/xray-statuspage"
+  fi
   ui_step 'done' 'Конфигурация сохранена и проверена'
 
   local dns_ok=1
@@ -33,6 +38,9 @@ install_stack() {
   load_stack_env
   check_domain_dns "$WEBHOOK_DOMAIN" || dns_ok=0
   check_domain_dns "$CABINET_DOMAIN" || dns_ok=0
+  if xray_monitoring_enabled; then
+    check_domain_dns "$XRAY_STATUS_DOMAIN" || dns_ok=0
+  fi
   if [[ "$dns_ok" -eq 0 ]]; then
     confirm "DNS ещё не готов. Продолжить сборку и запуск?" || {
       success "Конфигурация сохранена. После настройки DNS выполните: bedolaga start"
@@ -56,7 +64,9 @@ install_stack() {
       warn "Не удалось включить ежедневный бэкап. Это можно сделать: bedolaga schedule enable"
     fi
     doctor || true
-    ui_install_success "$bot_username" "https://${CABINET_DOMAIN}" "https://${WEBHOOK_DOMAIN}/webhook" "$backup_status"
+    local xray_url=''
+    xray_monitoring_enabled && xray_url="https://${XRAY_STATUS_DOMAIN}"
+    ui_install_success "$bot_username" "https://${CABINET_DOMAIN}" "https://${WEBHOOK_DOMAIN}/webhook" "$backup_status" "$xray_url"
     ui_hint "Добавьте домен ${CABINET_DOMAIN} в BotFather → Bot Settings → Domain."
     success "Все сервисы запущены и готовы к работе."
   else
