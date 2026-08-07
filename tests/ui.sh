@@ -24,10 +24,13 @@ output="$({
   ui_service_row caddy running/unhealthy
   ui_step active 'Working'
   ui_hint 'Run a command'
+  ui_manager_update 1.2.0 1.3.0 'Automatic stable update'
 })"
 grep -q 'BEDOLAGA MANAGER' <<<"$output" || fail "banner is missing"
 grep -q 'bot.*Работает' <<<"$output" || fail "healthy service row is missing"
 grep -q 'caddy.*Ошибка' <<<"$output" || fail "unhealthy service row is missing"
+grep -q '1.2.0.*1.3.0' <<<"$(tr '\n' ' ' <<<"$output")" || fail "manager update versions are missing"
+grep -q 'Automatic stable update' <<<"$output" || fail "manager update notes are missing"
 [[ "$output" != *$'\033'* ]] || fail "ANSI escape found with NO_COLOR"
 
 export BEDOLAGA_TEST_PROJECT_ROOT="$PROJECT_ROOT"

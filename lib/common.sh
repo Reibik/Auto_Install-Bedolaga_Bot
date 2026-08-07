@@ -7,7 +7,7 @@ BEDOLAGA_COMMON_LOADED=1
 
 # Переменные ниже используются другими файлами после source.
 # shellcheck disable=SC2034
-readonly BEDOLAGA_VERSION="1.2.0"
+readonly BEDOLAGA_VERSION="1.3.0"
 readonly BEDOLAGA_REPOSITORY="${BEDOLAGA_REPOSITORY:-Reibik/Auto_Install-Bedolaga_Bot}"
 readonly BOT_REPOSITORY="${BOT_REPOSITORY:-https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot.git}"
 readonly CABINET_REPOSITORY="${CABINET_REPOSITORY:-https://github.com/BEDOLAGA-DEV/bedolaga-cabinet.git}"
@@ -28,6 +28,7 @@ STACK_ENV="${CONFIG_ROOT}/stack.env"
 BOT_ENV="${CONFIG_ROOT}/bot.env"
 STATE_ROOT="${DATA_ROOT}/state"
 UPDATE_STATE="${STATE_ROOT}/last-update.env"
+MANAGER_UPDATE_CHECK_STATE="${STATE_ROOT}/manager-update-check"
 LOCK_FILE="${STATE_ROOT}/manager.lock"
 LOG_FILE="${DATA_ROOT}/manager.log"
 
@@ -51,7 +52,7 @@ fi
 
 # Эти значения намеренно объявлены в общем модуле и используются после source
 # другими модулями менеджера.
-: "$BEDOLAGA_VERSION" "$BOT_SOURCE_DIR" "$CABINET_SOURCE_DIR" "$XRAY_STATUS_SOURCE_DIR" "$CADDY_FILE" "$BOT_ENV" "$UPDATE_STATE" "$C_CYAN" "$C_BOLD"
+: "$BEDOLAGA_VERSION" "$BOT_SOURCE_DIR" "$CABINET_SOURCE_DIR" "$XRAY_STATUS_SOURCE_DIR" "$CADDY_FILE" "$BOT_ENV" "$UPDATE_STATE" "$MANAGER_UPDATE_CHECK_STATE" "$C_CYAN" "$C_BOLD"
 
 timestamp() { date '+%Y-%m-%d %H:%M:%S'; }
 

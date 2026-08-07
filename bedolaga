@@ -65,7 +65,7 @@ usage() {
   bedolaga restore <archive>        Восстановить резервную копию
   bedolaga schedule <action>        enable, disable или status
   bedolaga firewall <action>        безопасная настройка UFW
-  bedolaga self-update              Обновить Manager
+  bedolaga self-update [vX.Y.Z]     Обновить Manager до стабильной версии
   bedolaga uninstall [--purge-data] Удалить проект
   bedolaga version                  Версия Manager
 EOF
@@ -74,6 +74,7 @@ EOF
   NO_COLOR=1 bedolaga               Отключить ANSI-цвета
   BEDOLAGA_EMOJI=0 bedolaga         Отключить эмодзи
   BEDOLAGA_EMOJI=1 bedolaga         Принудительно включить эмодзи
+  BEDOLAGA_AUTO_UPDATE=0 bedolaga   Не проверять Manager при запуске меню
 EOF
 }
 
@@ -143,20 +144,33 @@ menu_choose_service() {
 
 menu() {
   require_root
-  local choice='' service=''
+  local choice='' service='' update_status=0 manager_command=''
+  if manager_auto_update; then
+    :
+  else
+    update_status=$?
+    if [[ "$update_status" -eq 10 ]]; then
+      read_tty choice "\n${C_CYAN}Нажмите Enter, чтобы открыть обновлённый Manager...${C_RESET}"
+      export BEDOLAGA_SKIP_UPDATE_CHECK=1
+      manager_command="$(command -v bedolaga 2>/dev/null || printf '%s/bedolaga' "$BEDOLAGA_LIB_ROOT")"
+      exec "$manager_command" menu
+    fi
+    warn "Автообновление не завершено. Открываю меню текущей версии v${BEDOLAGA_VERSION}."
+    read_tty choice "${C_CYAN}Нажмите Enter для продолжения...${C_RESET}"
+  fi
   while true; do
     ui_clear
-    ui_banner
-    printf '\n'
+    ui_banner 'Единый центр управления Bot, Cabinet и Xray Monitoring'
+    ui_section 'Обзор системы'
     menu_summary
-    ui_section 'Управление'
+    ui_section 'Сервисы и развёртывание'
     ui_menu_item 1 status 'Статус сервисов'
     ui_menu_item 2 start 'Запустить стек'
     ui_menu_item 3 stop 'Остановить стек'
     ui_menu_item 4 restart 'Перезапустить сервис'
-    ui_menu_item 5 update 'Проверить обновления'
-    ui_menu_item 6 deploy 'Обновить проект'
-    ui_section 'Обслуживание'
+    ui_menu_item 5 update 'Проверить версии компонентов'
+    ui_menu_item 6 deploy 'Обновить Bot, Cabinet и Xray'
+    ui_section 'Диагностика и обслуживание'
     ui_menu_item 7 doctor 'Диагностика'
     ui_menu_item 8 logs 'Просмотр логов'
     ui_menu_item 9 config 'Настройка проекта'
@@ -166,6 +180,7 @@ menu() {
     ui_menu_item 13 status 'Xray Checker + Status Page'
     ui_separator
     ui_menu_item 0 exit 'Выход'
+    ui_hint 'Manager проверяет стабильные обновления автоматически при открытии меню.'
     read_tty choice "\n${C_CYAN}Выберите действие › ${C_RESET}"
     case "$choice" in
       1) bash "$BEDOLAGA_LIB_ROOT/bedolaga" status || true ;;
@@ -252,7 +267,7 @@ main() {
     restore) backup_restore "$@" ;;
     schedule) backup_schedule "$@" ;;
     firewall) firewall_manage "$@" ;;
-    self-update) self_update ;;
+    self-update) self_update "$@" ;;
     uninstall) uninstall_stack "$@" ;;
     version | --version | -v) printf 'Bedolaga Manager %s\n' "$BEDOLAGA_VERSION" ;;
     help | --help | -h) usage ;;

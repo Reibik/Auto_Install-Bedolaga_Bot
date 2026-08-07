@@ -40,6 +40,8 @@ ui_icon() {
       stop) printf '⏹️' ;;
       restart) printf '🔄' ;;
       update) printf '⬆️' ;;
+      sparkle) printf '✨' ;;
+      shield) printf '🛡️' ;;
       deploy) printf '🚀' ;;
       doctor) printf '🩺' ;;
       logs) printf '📜' ;;
@@ -79,26 +81,28 @@ ui_clear() {
 }
 
 ui_banner() {
-  local subtitle="${1:-Bot + Cabinet Deployment Manager}"
+  local subtitle="${1:-Bot · Cabinet · Xray Monitoring · Safe Operations}"
   local brand_icon
   brand_icon="$(ui_icon brand)"
   if [[ "$UI_UNICODE_ENABLED" -eq 1 ]]; then
-    printf '%b╭──%b %s %bBEDOLAGA MANAGER%b · %bv%s%b\n' "$C_BLUE" "$C_RESET" "$brand_icon" "$C_BOLD" "$C_RESET" "$C_CYAN" "$BEDOLAGA_VERSION" "$C_RESET"
-    printf '%b│%b   %s\n' "$C_BLUE" "$C_RESET" "$subtitle"
-    printf '%b╰────────────────────────────────────────────%b\n' "$C_BLUE" "$C_RESET"
+    printf '%b╭─%b %s %bBEDOLAGA MANAGER%b %b──────────────────────── v%s%b\n' "$C_BLUE" "$C_RESET" "$brand_icon" "$C_BOLD" "$C_RESET" "$C_CYAN" "$BEDOLAGA_VERSION" "$C_RESET"
+    printf '%b│%b  %s\n' "$C_BLUE" "$C_RESET" "$subtitle"
+    printf '%b╰────────────────────────────────────────────────────────────%b\n' "$C_BLUE" "$C_RESET"
   else
-    printf '%b+--%b BEDOLAGA MANAGER · v%s\n' "$C_BLUE" "$C_RESET" "$BEDOLAGA_VERSION"
-    printf '%b|%b   %s\n' "$C_BLUE" "$C_RESET" "$subtitle"
-    printf '%b+--------------------------------------------%b\n' "$C_BLUE" "$C_RESET"
+    printf '%b+--%b BEDOLAGA MANAGER -------------------------- v%s\n' "$C_BLUE" "$C_RESET" "$BEDOLAGA_VERSION"
+    printf '%b|%b  %s\n' "$C_BLUE" "$C_RESET" "$subtitle"
+    printf '%b+------------------------------------------------------------%b\n' "$C_BLUE" "$C_RESET"
   fi
 }
 
 ui_section() {
   local title="$1"
   if [[ "$UI_UNICODE_ENABLED" -eq 1 ]]; then
-    printf '\n%b───────────── %s ─────────────%b\n\n' "$C_BLUE" "$title" "$C_RESET"
+    printf '\n%b╭─ %b%b%s%b\n' "$C_BLUE" "$C_RESET" "$C_BOLD" "$title" "$C_RESET"
+    printf '%b╰────────────────────────────────────────────────────────────%b\n\n' "$C_BLUE" "$C_RESET"
   else
-    printf '\n%b------------- %s -------------%b\n\n' "$C_BLUE" "$title" "$C_RESET"
+    printf '\n%b+-- %s%b\n' "$C_BLUE" "$title" "$C_RESET"
+    printf '%b+------------------------------------------------------------%b\n\n' "$C_BLUE" "$C_RESET"
   fi
 }
 
@@ -112,7 +116,7 @@ ui_separator() {
 
 ui_menu_item() {
   local number="$1" icon="$2" label="$3"
-  printf '  %2s. %s %s\n' "$number" "$(ui_icon "$icon")" "$label"
+  printf '  %b[%2s]%b  %s  %s\n' "$C_CYAN" "$number" "$C_RESET" "$(ui_icon "$icon")" "$label"
 }
 
 ui_key_value() {
@@ -154,6 +158,25 @@ ui_progress() {
 
 ui_hint() {
   printf '\n  %s %s\n' "$(ui_icon lightbulb)" "$*"
+}
+
+ui_manager_update() {
+  local current_version="$1" next_version="$2"
+  local arrow='->'
+  shift 2
+  [[ "$UI_UNICODE_ENABLED" -eq 0 ]] || arrow='→'
+  ui_section "$(ui_icon sparkle) Доступно обновление Manager"
+  printf '  %bТекущая версия%b   v%s\n' "$C_BOLD" "$C_RESET" "$current_version"
+  printf '  %bНовая версия%b     %bv%s%b\n' "$C_BOLD" "$C_RESET" "$C_GREEN" "$next_version" "$C_RESET"
+  printf '  %bПереход%b           v%s %s v%s\n' "$C_BOLD" "$C_RESET" "$current_version" "$arrow" "$next_version"
+  if [[ "$#" -gt 0 ]]; then
+    printf '\n  %bЧто изменилось:%b\n' "$C_BOLD" "$C_RESET"
+    local note
+    for note in "$@"; do
+      printf '    %b•%b %s\n' "$C_CYAN" "$C_RESET" "$note"
+    done
+  fi
+  printf '\n  %s Проверена стабильная версия GitHub Release. Начинаю безопасное обновление.\n' "$(ui_icon shield)"
 }
 
 ui_install_success() {

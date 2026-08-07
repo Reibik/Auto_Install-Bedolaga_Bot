@@ -127,16 +127,142 @@ rollback_last_update() {
   warn "Схема базы данных автоматически не откатывалась. При несовместимости используйте: bedolaga restore ${BACKUP:-<backup>}"
 }
 
+manager_latest_release_tag() {
+  local final_url tag
+  final_url="$(curl -fsSL --retry 1 --connect-timeout 4 --max-time 10 \
+    -o /dev/null -w '%{url_effective}' \
+    "https://github.com/${BEDOLAGA_REPOSITORY}/releases/latest" 2>/dev/null)" || return 1
+  final_url="${final_url%%\?*}"
+  tag="${final_url##*/}"
+  [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  printf '%s\n' "$tag"
+}
+
+manager_version_is_newer() {
+  local candidate="$1" current="$2" highest
+  [[ "$candidate" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  [[ "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  [[ "$candidate" != "$current" ]] || return 1
+  highest="$(printf '%s\n%s\n' "$current" "$candidate" | LC_ALL=C sort -V | tail -n 1)"
+  [[ "$highest" == "$candidate" ]]
+}
+
+manager_release_notes() {
+  local tag="$1" version="${1#v}" changelog line note found=0 count=0
+  changelog="$(curl -fsSL --retry 1 --connect-timeout 4 --max-time 10 \
+    "https://raw.githubusercontent.com/${BEDOLAGA_REPOSITORY}/${tag}/CHANGELOG.md" 2>/dev/null)" || return 1
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    if [[ "$found" -eq 0 ]]; then
+      if [[ "$line" == "## $version" || "$line" == "## $version "* ]]; then
+        found=1
+      fi
+      continue
+    fi
+    [[ "$line" == '## '* ]] && break
+    [[ "$line" == '- '* ]] || continue
+    note="${line#- }"
+    printf '%s\n' "${note:0:180}"
+    ((count += 1))
+    [[ "$count" -ge 3 ]] && break
+  done <<<"$changelog"
+  [[ "$count" -gt 0 ]]
+}
+
+manager_update_check_due() {
+  case "${BEDOLAGA_AUTO_UPDATE:-1}" in
+    0 | false | no | off) return 1 ;;
+  esac
+  [[ "${BEDOLAGA_SKIP_UPDATE_CHECK:-0}" != 1 ]] || return 1
+  local interval="${BEDOLAGA_UPDATE_CHECK_INTERVAL:-3600}" now checked_at
+  [[ "$interval" =~ ^[0-9]+$ ]] || interval=3600
+  [[ "$interval" -gt 0 && -f "$MANAGER_UPDATE_CHECK_STATE" ]] || return 0
+  checked_at="$(stat -c '%Y' "$MANAGER_UPDATE_CHECK_STATE" 2>/dev/null || printf '0')"
+  now="$(date +%s)"
+  ((now - checked_at >= interval))
+}
+
+manager_record_update_check() {
+  local result="${1:-unknown}"
+  ensure_runtime_dirs
+  printf '%s\n' "$result" >"$MANAGER_UPDATE_CHECK_STATE"
+  chmod 600 "$MANAGER_UPDATE_CHECK_STATE"
+}
+
+manager_install_release() {
+  local tag="$1" installer
+  [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { error "Некорректный тег Manager: $tag"; return 1; }
+  installer="$(mktemp)"
+  info "Загружаю и проверяю Bedolaga Manager $tag."
+  if ! curl -fsSL --retry 3 --connect-timeout 15 --max-time 60 \
+    "https://raw.githubusercontent.com/${BEDOLAGA_REPOSITORY}/${tag}/install.sh" -o "$installer"; then
+    rm -f "$installer"
+    error "Не удалось загрузить установщик $tag. Текущая версия не изменена."
+    return 1
+  fi
+  if ! grep -q '^#!/usr/bin/env bash' "$installer"; then
+    rm -f "$installer"
+    error "Загружен некорректный install.sh. Текущая версия не изменена."
+    return 1
+  fi
+  chmod 700 "$installer"
+  if ! BEDOLAGA_REF="$tag" BEDOLAGA_NO_WIZARD=1 bash "$installer" --no-wizard; then
+    rm -f "$installer"
+    error "Обновление $tag не установлено. Manager сохранил предыдущую версию."
+    return 1
+  fi
+  rm -f "$installer"
+  success "Bedolaga Manager обновлён: v${BEDOLAGA_VERSION} → ${tag}."
+}
+
+manager_show_release() {
+  local tag="$1" version="${1#v}"
+  local -a notes=()
+  mapfile -t notes < <(manager_release_notes "$tag" || true)
+  if [[ "${#notes[@]}" -eq 0 ]]; then
+    notes=("Улучшения стабильности, интерфейса и управления проектом.")
+  fi
+  ui_manager_update "$BEDOLAGA_VERSION" "$version" "${notes[@]}"
+}
+
+manager_auto_update() {
+  manager_update_check_due || return 0
+  info "Проверяю стабильные обновления Bedolaga Manager..."
+  local tag version
+  if ! tag="$(manager_latest_release_tag)"; then
+    manager_record_update_check unavailable
+    warn "Не удалось проверить обновления. Продолжаю запуск текущей версии v${BEDOLAGA_VERSION}."
+    return 0
+  fi
+  version="${tag#v}"
+  if ! manager_version_is_newer "$version" "$BEDOLAGA_VERSION"; then
+    manager_record_update_check "$tag"
+    return 0
+  fi
+  manager_show_release "$tag"
+  if manager_install_release "$tag"; then
+    manager_record_update_check "$tag"
+    return 10
+  fi
+  return 1
+}
+
 self_update() {
   require_root
-  local installer
-  installer="$(mktemp)"
-  info "Загружаю актуальный Bedolaga Manager."
-  curl -fsSL --retry 3 --connect-timeout 15 \
-    "https://raw.githubusercontent.com/${BEDOLAGA_REPOSITORY}/main/install.sh" -o "$installer"
-  grep -q '^#!/usr/bin/env bash' "$installer" || { rm -f "$installer"; die "Загружен некорректный install.sh"; }
-  chmod 700 "$installer"
-  BEDOLAGA_NO_WIZARD=1 bash "$installer"
-  rm -f "$installer"
-  success "Bedolaga Manager обновлён."
+  [[ "$#" -le 1 ]] || die "Использование: bedolaga self-update [vX.Y.Z]"
+  local tag="${1:-}" version
+  if [[ -z "$tag" ]]; then
+    info "Проверяю последний стабильный GitHub Release."
+    tag="$(manager_latest_release_tag)" || die "Не удалось определить последнюю стабильную версию."
+  fi
+  [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "Некорректная версия: $tag"
+  version="${tag#v}"
+  if ! manager_version_is_newer "$version" "$BEDOLAGA_VERSION"; then
+    success "Уже установлена актуальная версия Bedolaga Manager v${BEDOLAGA_VERSION}."
+    manager_record_update_check "$tag"
+    return 0
+  fi
+  manager_show_release "$tag"
+  manager_install_release "$tag"
+  manager_record_update_check "$tag"
 }

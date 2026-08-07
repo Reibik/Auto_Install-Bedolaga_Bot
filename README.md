@@ -114,6 +114,28 @@ NO_COLOR=1 BEDOLAGA_EMOJI=0 bedolaga
 
 Эмодзи можно принудительно включить через `BEDOLAGA_EMOJI=1`.
 
+### ✨ Автообновление Manager
+
+При открытии меню командой `bedolaga` Manager проверяет последний **стабильный GitHub Release**. Если доступна новая версия, перед установкой показываются:
+
+- текущая и новая версии;
+- понятное направление обновления, например `v1.2.0 → v1.3.0`;
+- три главных изменения из changelog нового релиза.
+
+Обновление выполняется автоматически из архива конкретного тега. Загруженная версия проходит проверку Bash-синтаксиса и пробный запуск; при ошибке установщик возвращает предыдущий Manager. Недоступность GitHub не блокирует открытие меню.
+
+Чтобы не задерживать каждый запуск, успешная проверка кэшируется на один час. Отключить её для конкретного запуска:
+
+```bash
+BEDOLAGA_AUTO_UPDATE=0 bedolaga
+```
+
+Ручная проверка и обновление до последнего стабильного релиза:
+
+```bash
+bedolaga self-update
+```
+
 Или используйте отдельные команды:
 
 | Команда | Назначение |
@@ -144,7 +166,7 @@ NO_COLOR=1 BEDOLAGA_EMOJI=0 bedolaga
 | `bedolaga restore <archive>` | Восстановить выбранную копию |
 | `bedolaga schedule enable` | Включить ежедневные автобэкапы |
 | `bedolaga firewall enable` | Настроить UFW для SSH, HTTP и HTTPS |
-| `bedolaga self-update` | Обновить Bedolaga Manager |
+| `bedolaga self-update [vX.Y.Z]` | Обновить Manager до последней или указанной стабильной версии |
 
 Доступные сервисы для `logs` и `restart`: `bot`, `cabinet`, `caddy`, `postgres`, `redis`, а при включённом модуле — `xray-statuspage` и `xray-checker`.
 
@@ -308,6 +330,7 @@ bash tests/smoke.sh
 bash tests/lifecycle.sh
 bash tests/xray.sh
 bash tests/ui.sh
+bash tests/manager-update.sh
 ```
 
 CI дополнительно проверяет итоговый Docker Compose и запускает тесты в чистых контейнерах Ubuntu 22.04, Ubuntu 24.04 и Debian 12.
