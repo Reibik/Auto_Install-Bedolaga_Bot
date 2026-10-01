@@ -22,13 +22,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y shellcheck
-          bash -n bedolaga install.sh tests/*.sh lib/*.sh
+          for script in bedolaga install.sh tests/*.sh lib/*.sh; do bash -n "$script"; done
           shellcheck -x bedolaga install.sh tests/*.sh lib/*.sh
           bash tests/smoke.sh
           bash tests/lifecycle.sh
           bash tests/xray.sh
           bash tests/ui.sh
           bash tests/manager-update.sh
+          bash tests/installer.sh
+          bash tests/backup.sh
           bash tests/platform.sh
       - name: Build release bundle
         run: |
@@ -43,4 +45,12 @@ jobs:
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes
+        run: |
+          notes_file="docs/releases/${GITHUB_REF_NAME}.md"
+          if [[ -f "$notes_file" ]]; then
+            title="$(head -n 1 "$notes_file")"
+            title="${title#\# }"
+            gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "$title" --notes-file "$notes_file"
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes
+          fi

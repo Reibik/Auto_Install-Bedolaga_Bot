@@ -34,60 +34,62 @@ backup_copy_xray_data() {
   fi
 }
 
-backup_create() {
+backup_create() (
   require_root
   local kind="${1:-manual}"
-  local archive staging database_dump='unavailable'
-  ensure_runtime_dirs
-  staging="$(mktemp -d "${DATA_ROOT}/backup-stage.XXXXXX")"
-  archive="$(backup_archive_name "$kind")"
-  mkdir -p "$staging/config" "$staging/app-data"
+  local archive='' staging database_dump='unavailable' completed=0
+  [[ "$kind" =~ ^[a-zA-Z0-9_-]+$ ]] || { error "Некорректный тип бэкапа."; return 1; }
+  ensure_runtime_dirs || return 1
+  staging="$(mktemp -d "${DATA_ROOT}/backup-stage.XXXXXX")" || return 1
+  trap 'rm -rf -- "$staging"; if [[ "$completed" == 0 && -n "$archive" ]]; then rm -f -- "$archive" "${archive}.sha256"; fi' EXIT
+  archive="$(backup_archive_name "$kind")" || return 1
+  mkdir -p "$staging/config" "$staging/app-data" || return 1
 
-  info "Создаю резервную копию ($kind)."
+  info "Создаю резервную копию ($kind)." >&2
   if [[ -f "$STACK_ENV" ]]; then
-    cp -a "$CONFIG_ROOT/." "$staging/config/"
+    cp -a "$CONFIG_ROOT/." "$staging/config/" || return 1
   fi
   if [[ -d "$DATA_ROOT/bot" ]]; then
-    cp -a "$DATA_ROOT/bot/." "$staging/app-data/"
+    cp -a "$DATA_ROOT/bot/." "$staging/app-data/" || return 1
   fi
-  backup_copy_xray_data "$staging/xray-data"
+  backup_copy_xray_data "$staging/xray-data" || return 1
 
   if compose ps --status running postgres 2>/dev/null | grep -q postgres; then
-    load_stack_env
+    load_stack_env || return 1
     if compose exec -T postgres pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc >"$staging/database.dump"; then
       database_dump='database.dump'
     else
       rm -f "$staging/database.dump"
-      [[ "$kind" != preupdate ]] || { rm -rf -- "$staging"; die "Обновление отменено: PostgreSQL dump не создан."; }
+      [[ "$kind" != preupdate ]] || { error "Обновление отменено: PostgreSQL dump не создан."; return 1; }
       warn "Не удалось создать PostgreSQL dump. Остальные данные будут сохранены."
     fi
   else
-    [[ "$kind" != preupdate ]] || { rm -rf -- "$staging"; die "Обновление отменено: PostgreSQL не запущен."; }
+    [[ "$kind" != preupdate ]] || { error "Обновление отменено: PostgreSQL не запущен."; return 1; }
     warn "PostgreSQL не запущен — dump базы не создан."
   fi
 
-  touch "$staging/manifest.env"
-  dotenv_set "$staging/manifest.env" CREATED_AT "$(date --iso-8601=seconds)"
-  dotenv_set "$staging/manifest.env" KIND "$kind"
-  dotenv_set "$staging/manifest.env" MANAGER_VERSION "$BEDOLAGA_VERSION"
-  dotenv_set "$staging/manifest.env" BOT_COMMIT "$(git_commit "$BOT_SOURCE_DIR")"
-  dotenv_set "$staging/manifest.env" CABINET_COMMIT "$(git_commit "$CABINET_SOURCE_DIR")"
-  dotenv_set "$staging/manifest.env" XRAY_STATUS_COMMIT "$(git_commit "$XRAY_STATUS_SOURCE_DIR")"
-  dotenv_set "$staging/manifest.env" DATABASE_DUMP "$database_dump"
+  touch "$staging/manifest.env" || return 1
+  dotenv_set "$staging/manifest.env" CREATED_AT "$(date --iso-8601=seconds)" || return 1
+  dotenv_set "$staging/manifest.env" KIND "$kind" || return 1
+  dotenv_set "$staging/manifest.env" MANAGER_VERSION "$BEDOLAGA_VERSION" || return 1
+  dotenv_set "$staging/manifest.env" BOT_COMMIT "$(git_commit "$BOT_SOURCE_DIR")" || return 1
+  dotenv_set "$staging/manifest.env" CABINET_COMMIT "$(git_commit "$CABINET_SOURCE_DIR")" || return 1
+  dotenv_set "$staging/manifest.env" XRAY_STATUS_COMMIT "$(git_commit "$XRAY_STATUS_SOURCE_DIR")" || return 1
+  dotenv_set "$staging/manifest.env" DATABASE_DUMP "$database_dump" || return 1
 
-  tar -C "$staging" -czf "$archive" .
-  (cd "$BACKUP_ROOT" && sha256sum "$(basename "$archive")" >"$(basename "${archive}.sha256")")
-  rm -rf -- "$staging"
-  chmod 600 "$archive" "${archive}.sha256"
-  success "Бэкап создан: $archive ($(du -h "$archive" | awk '{print $1}'))"
+  tar -C "$staging" -czf "$archive" . || return 1
+  (cd "$BACKUP_ROOT" && sha256sum "$(basename "$archive")" >"$(basename "${archive}.sha256")") || return 1
+  chmod 600 "$archive" "${archive}.sha256" || return 1
+  completed=1
+  success "Бэкап создан: $archive ($(du -h "$archive" | awk '{print $1}'))" >&2
   printf '%s\n' "$archive"
-}
+)
 
 backup_run() {
   require_root
   local kind="${1:-manual}"
   with_lock
-  backup_create "$kind"
+  backup_create "$kind" || return 1
   [[ "$kind" != automatic ]] || backup_rotate
 }
 
@@ -129,7 +131,7 @@ backup_restore() {
   confirm_phrase "Восстановление перезапишет конфигурацию и базу данных." "RESTORE" || die "Отменено."
 
   with_lock
-  backup_create emergency >/dev/null
+  backup_create emergency >/dev/null || return 1
   local staging
   staging="$(mktemp -d "${DATA_ROOT}/restore-stage.XXXXXX")"
   tar -xzf "$archive" -C "$staging"

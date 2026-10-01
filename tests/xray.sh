@@ -63,7 +63,10 @@ up_calls=0
 require_root() { :; }
 with_lock() { :; }
 wait_for_services() { return 0; }
-backup_create() { printf '%s\n' "$TEST_ROOT/preupdate.tar.gz"; }
+backup_create() {
+  [[ "${TEST_BACKUP_FAIL:-0}" == 0 ]] || return 1
+  printf '%s\n' "$TEST_ROOT/preupdate.tar.gz"
+}
 docker() {
   printf '%s\n' "$*" >>"$docker_log"
   if [[ "$*" == "image inspect kutovoys/xray-checker:latest --format {{.Id}}" ]]; then
@@ -82,6 +85,14 @@ compose() {
     *) fail "unexpected compose call: $*" ;;
   esac
 }
+
+TEST_BACKUP_FAIL=1
+if xray_update >/dev/null 2>&1; then
+  fail "Xray update proceeded after backup failure"
+fi
+[[ ! -e "$compose_log" ]] || fail "Xray images changed without a backup"
+[[ "$(git -C "$managed" rev-parse HEAD)" == "$status_before" ]] || fail "failed backup changed Status Page checkout"
+unset TEST_BACKUP_FAIL
 
 if xray_update >/dev/null 2>&1; then
   fail "failed Xray update unexpectedly succeeded"

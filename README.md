@@ -8,10 +8,11 @@
 [![Security](https://img.shields.io/github/actions/workflow/status/Reibik/Auto_Install-Bedolaga_Bot/security.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=Security)](https://github.com/Reibik/Auto_Install-Bedolaga_Bot/actions/workflows/security.yml)
 [![License](https://img.shields.io/github/license/Reibik/Auto_Install-Bedolaga_Bot?style=for-the-badge&color=7c3aed)](LICENSE)
 [![Shell](https://img.shields.io/badge/Shell-Bash-22c55e?style=for-the-badge&logo=gnubash&logoColor=white)](https://www.gnu.org/software/bash/)
+[![Release](https://img.shields.io/github/v/release/Reibik/Auto_Install-Bedolaga_Bot?style=for-the-badge&logo=github&color=06b6d4)](https://github.com/Reibik/Auto_Install-Bedolaga_Bot/releases/latest)
 
 **Автоматическая установка · Xray Monitoring · HTTPS · Обновления · Бэкапы · Диагностика**
 
-[Быстрый старт](#quick-start) · [Возможности](#features) · [Управление](#management) · [Архитектура](#architecture) · [Поддержка](#support)
+[Что нового](#whats-new) · [Быстрый старт](#quick-start) · [Обновление](#upgrade) · [Управление](#management) · [Поддержка](#support)
 
 </div>
 
@@ -19,6 +20,22 @@
 
 > [!NOTE]
 > **Bedolaga Manager** разворачивает [Bedolaga Bot](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot), [Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet), PostgreSQL, Redis и Caddy. По желанию тот же мастер устанавливает [Xray Checker](https://github.com/kutovoys/xray-checker) и [Xray Checker Status Page](https://github.com/Mrvibecodic/xray-checker-statuspage/tree/go-build).
+
+---
+
+<a id="whats-new"></a>
+## 🛡️ Что нового в v1.3.1
+
+**Больше надёжности при установке, обновлении и создании резервных копий.** Интерфейс, Bot, Cabinet и опциональный Xray Monitoring остаются привычными.
+
+| Изменение | Что это значит для вас |
+|---|---|
+| 🔐 Проверка SHA-256 и версии релизного архива | Manager проверяет скачанный пакет перед заменой рабочей установки |
+| 🔒 Блокировки установки и обновления | Две одновременно запущенные операции не заменяют Manager параллельно |
+| 💾 Честная проверка бэкапа | Ошибка копирования, дампа, упаковки или checksum отменяет обновление, а не маскируется под успех |
+| 🩺 Более точная диагностика | Остановленный контейнер больше не отображается как отсутствующий |
+
+📖 [Описание релиза v1.3.1](https://github.com/Reibik/Auto_Install-Bedolaga_Bot/releases/tag/v1.3.1) · [Полный список изменений](CHANGELOG.md)
 
 ---
 
@@ -45,10 +62,10 @@
 Запустите на **чистом сервере** от имени `root`:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/main/install.sh)
+BEDOLAGA_REF=v1.3.1 BEDOLAGA_EXPECTED_VERSION=1.3.1 bash <(curl -fsSL https://raw.githubusercontent.com/Reibik/Auto_Install-Bedolaga_Bot/v1.3.1/install.sh)
 ```
 
-Установщик проверит систему, задаст вопросы по конфигурации, развернёт сервисы и проверит их работоспособность. После завершения откройте главное меню:
+Команда устанавливает **конкретный стабильный релиз v1.3.1**, а не текущее содержимое ветки `main`. Установщик проверит систему, задаст вопросы по конфигурации, развернёт сервисы и проверит их работоспособность. После завершения откройте главное меню:
 
 ```bash
 bedolaga
@@ -97,6 +114,34 @@ Username бота определяется автоматически через
 
 ---
 
+<a id="upgrade"></a>
+## 🔄 Уже установлено? Обновитесь без переустановки
+
+На сервере от имени `root` выполните:
+
+```bash
+bedolaga version
+bedolaga self-update
+bedolaga version
+bedolaga status
+```
+
+После обновления до этого релиза команда `bedolaga version` покажет `Bedolaga Manager 1.3.1`. Если уже выпущен более новый стабильный релиз, `self-update` установит его. Для перехода именно на v1.3.1 из более ранней версии используйте `bedolaga self-update v1.3.1`.
+
+| Что хотите обновить | Команда | Что изменится |
+|---|---|---|
+| 🎛️ Установщик и меню управления | `bedolaga self-update` | Только код Manager; контейнеры приложений не пересоздаются |
+| 🤖 Bot и Cabinet, а также включённый Xray Monitoring | `bedolaga update all` | Компоненты приложений; перед обновлением создаются резервные копии |
+| 📡 Только Xray Monitoring | `bedolaga xray update` | Checker и Status Page, если модуль настроен |
+
+> [!IMPORTANT]
+> Обновление Manager **не требует повторного мастера настройки**, не удаляет `.env` и не заменяет том PostgreSQL. Не запускайте новую установку на работающем сервере вместо `self-update`.
+
+> [!NOTE]
+> Стек сохраняет PostgreSQL 15 и существующий том базы данных. Переход на PostgreSQL 18 требует отдельной миграции и не выполняется автоматически. Подробнее — в [документации по архитектуре](docs/ARCHITECTURE.md#модель-обновления).
+
+---
+
 <a id="management"></a>
 ## 🎛️ Управление
 
@@ -119,12 +164,12 @@ NO_COLOR=1 BEDOLAGA_EMOJI=0 bedolaga
 При открытии меню командой `bedolaga` Manager проверяет последний **стабильный GitHub Release**. Если доступна новая версия, перед установкой показываются:
 
 - текущая и новая версии;
-- понятное направление обновления, например `v1.2.0 → v1.3.0`;
+- понятное направление обновления, например `v1.3.0 → v1.3.1`;
 - три главных изменения из changelog нового релиза.
 
-Обновление выполняется автоматически из архива конкретного тега. Загруженная версия проходит проверку Bash-синтаксиса и пробный запуск; при ошибке установщик возвращает предыдущий Manager. Недоступность GitHub не блокирует открытие меню.
+Обновление выполняется автоматически из опубликованного релизного архива конкретного тега. Manager проверяет SHA-256, версию внутри архива, Bash-синтаксис и пробный запуск до замены рабочей установки. Блокировки защищают от одновременных обновлений; при ошибке рабочая версия сохраняется. Недоступность GitHub не блокирует открытие меню.
 
-Чтобы не задерживать каждый запуск, успешная проверка кэшируется на один час. Отключить её для конкретного запуска:
+Чтобы не задерживать каждый запуск, результат проверки кэшируется на один час; при недоступном GitHub меню продолжает работать. Ручная команда `self-update` не ждёт окончания этого интервала. Отключить автообновление для конкретного запуска:
 
 ```bash
 BEDOLAGA_AUTO_UPDATE=0 bedolaga
@@ -169,6 +214,20 @@ bedolaga self-update
 | `bedolaga self-update [vX.Y.Z]` | Обновить Manager до последней или указанной стабильной версии |
 
 Доступные сервисы для `logs` и `restart`: `bot`, `cabinet`, `caddy`, `postgres`, `redis`, а при включённом модуле — `xray-statuspage` и `xray-checker`.
+
+### 📁 Где находятся `.env` и настройки?
+
+Конфигурация основного бота хранится в **`/etc/bedolaga/bot.env`**, а параметры Docker Compose и доменов — в **`/etc/bedolaga/stack.env`**. Это рабочие файлы Manager; редактировать `.env.example` в исходниках для настройки сервера не нужно.
+
+```bash
+bedolaga config paths    # показать все пути
+bedolaga config bot      # открыть настройки бота
+bedolaga config stack    # открыть параметры стека
+bedolaga apply           # применить сохранённые изменения
+```
+
+> [!WARNING]
+> `.env` содержит токены и пароли. Не публикуйте его и не прикладывайте к issues или скриншотам без удаления секретов.
 
 <details>
 <summary><strong>📡 Как устроен Xray Monitoring</strong></summary>
@@ -262,6 +321,8 @@ bedolaga rollback
 
 Автобэкап запускается systemd timer примерно в `03:00`. По умолчанию хранятся семь автоматических архивов; ручные и аварийные копии автоматически не удаляются.
 
+В v1.3.1 ошибка копирования данных, создания PostgreSQL dump перед обновлением, упаковки или расчёта checksum возвращает ошибку. Незавершённый архив и временный каталог очищаются; обновление приложений не продолжается с таким бэкапом.
+
 ---
 
 ## 🔒 Безопасность
@@ -324,13 +385,15 @@ bedolaga uninstall --purge-data
 ## 🧪 Разработка
 
 ```bash
-bash -n bedolaga install.sh tests/*.sh lib/*.sh
+for script in bedolaga install.sh tests/*.sh lib/*.sh; do bash -n "$script"; done
 shellcheck -x bedolaga install.sh tests/*.sh lib/*.sh
 bash tests/smoke.sh
 bash tests/lifecycle.sh
 bash tests/xray.sh
 bash tests/ui.sh
 bash tests/manager-update.sh
+bash tests/installer.sh
+bash tests/backup.sh
 ```
 
 CI дополнительно проверяет итоговый Docker Compose и запускает тесты в чистых контейнерах Ubuntu 22.04, Ubuntu 24.04 и Debian 12.

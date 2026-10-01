@@ -128,7 +128,7 @@ preflight() {
 service_state() {
   local service="$1"
   local container_id state health
-  container_id="$(compose ps -q "$service" 2>/dev/null || true)"
+  container_id="$(compose ps -a -q "$service" 2>/dev/null || true)"
   if [[ -z "$container_id" ]]; then
     printf 'not-created\n'
     return 1

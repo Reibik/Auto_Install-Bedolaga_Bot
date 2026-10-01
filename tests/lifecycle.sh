@@ -47,6 +47,12 @@ second="$(remote_commit "$managed" main)"
 [[ "$first" != "$second" ]] || fail "remote update not detected"
 checkout_commit "$managed" "$second"
 [[ "$(git -C "$managed" rev-parse HEAD)" == "$second" ]] || fail "checkout failed"
+if remote_commit "$managed" nonexistent-branch >/dev/null 2>&1; then
+  fail "fetch failure returned a stale commit"
+fi
+git -C "$seed" tag -a v1.0.0 -m tagged
+git -C "$seed" push -q origin v1.0.0
+[[ "$(remote_commit "$managed" v1.0.0)" == "$second" ]] || fail "tag fetch was not resolved to its commit"
 
 printf 'dirty\n' >>"$managed/version.txt"
 if (assert_clean_repo "$managed" Test >/dev/null 2>&1); then
@@ -72,7 +78,10 @@ compose_log="$TEST_ROOT/compose.log"
 require_root() { :; }
 with_lock() { :; }
 load_stack_env() { BOT_REF=main; CABINET_REF=main; }
-backup_create() { printf '%s\n' "$TEST_ROOT/preupdate.tar.gz"; }
+backup_create() {
+  [[ "${TEST_BACKUP_FAIL:-0}" == 0 ]] || return 1
+  printf '%s\n' "$TEST_ROOT/preupdate.tar.gz"
+}
 dotenv_merge_missing() { :; }
 sanitize_bot_env() { :; }
 sync_bot_assets() { :; }
@@ -86,6 +95,14 @@ compose() {
     *) fail "unexpected compose call: $*" ;;
   esac
 }
+
+TEST_BACKUP_FAIL=1
+if update_components all >/dev/null 2>&1; then
+  fail "update proceeded after backup failure"
+fi
+[[ ! -e "$compose_log" ]] || fail "compose was invoked without a successful backup"
+[[ "$(git -C "$BOT_SOURCE_DIR" rev-parse HEAD)" == "$bot_before" ]] || fail "failed backup changed Bot checkout"
+unset TEST_BACKUP_FAIL
 
 if update_components all >/dev/null 2>&1; then
   fail "update unexpectedly succeeded after compose up failure"

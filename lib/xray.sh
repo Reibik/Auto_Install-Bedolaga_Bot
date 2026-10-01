@@ -223,12 +223,16 @@ xray_update() {
   assert_clean_repo "$XRAY_STATUS_SOURCE_DIR" "Xray Status Page"
   local status_before status_after checker_before backup
   status_before="$(git_commit "$XRAY_STATUS_SOURCE_DIR")"
-  status_after="$(remote_commit "$XRAY_STATUS_SOURCE_DIR" "${XRAY_STATUS_REF:-go-build}")"
+  status_after="$(remote_commit "$XRAY_STATUS_SOURCE_DIR" "${XRAY_STATUS_REF:-go-build}")" || return 1
   checker_before="$(docker image inspect "$XRAY_CHECKER_IMAGE" --format '{{.Id}}' 2>/dev/null || true)"
-  backup="$(backup_create preupdate | tail -n 1)"
+  backup="$(backup_create preupdate | tail -n 1)" || {
+    error "Обновление Xray отменено: резервная копия не создана."
+    return 1
+  }
+  [[ -n "$backup" ]] || { error "Не получен путь резервной копии Xray."; return 1; }
   info "Проверяю новый образ Xray Checker и commit Status Page."
-  compose pull xray-checker
-  [[ "$status_before" == "$status_after" ]] || checkout_commit "$XRAY_STATUS_SOURCE_DIR" "$status_after"
+  compose pull xray-checker || return 1
+  [[ "$status_before" == "$status_after" ]] || checkout_commit "$XRAY_STATUS_SOURCE_DIR" "$status_after" || return 1
   dotenv_set "$STACK_ENV" XRAY_STATUS_VERSION "go-build-${status_after:0:8}"
   load_stack_env
   if ! compose build xray-statuspage; then

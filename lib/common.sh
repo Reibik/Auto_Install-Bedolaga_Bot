@@ -7,7 +7,7 @@ BEDOLAGA_COMMON_LOADED=1
 
 # Переменные ниже используются другими файлами после source.
 # shellcheck disable=SC2034
-readonly BEDOLAGA_VERSION="1.3.0"
+readonly BEDOLAGA_VERSION="1.3.1"
 readonly BEDOLAGA_REPOSITORY="${BEDOLAGA_REPOSITORY:-Reibik/Auto_Install-Bedolaga_Bot}"
 readonly BOT_REPOSITORY="${BOT_REPOSITORY:-https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot.git}"
 readonly CABINET_REPOSITORY="${CABINET_REPOSITORY:-https://github.com/BEDOLAGA-DEV/bedolaga-cabinet.git}"
@@ -78,7 +78,7 @@ require_root() {
 }
 
 ensure_runtime_dirs() {
-  mkdir -p "$INSTALL_ROOT" "$CONFIG_ROOT" "$DATA_ROOT" "$BACKUP_ROOT" "$SOURCE_ROOT" "$STATE_ROOT"
+  mkdir -p "$INSTALL_ROOT" "$CONFIG_ROOT" "$DATA_ROOT" "$BACKUP_ROOT" "$SOURCE_ROOT" "$STATE_ROOT" || return 1
   chmod 700 "$CONFIG_ROOT" "$STATE_ROOT"
 }
 
@@ -109,7 +109,7 @@ managed_services() {
 }
 
 with_lock() {
-  ensure_runtime_dirs
+  ensure_runtime_dirs || die "Не удалось подготовить каталоги для блокировки операции."
   if command_exists flock; then
     exec 9>"$LOCK_FILE"
     flock -n 9 || die "Другая операция Bedolaga уже выполняется."

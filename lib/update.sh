@@ -12,13 +12,13 @@ assert_clean_repo() {
 remote_commit() {
   local directory="$1"
   local ref="$2"
-  git -C "$directory" fetch --quiet origin "$ref"
-  git -C "$directory" rev-parse "origin/$ref"
+  git -C "$directory" fetch --quiet origin "$ref" || return 1
+  git -C "$directory" rev-parse --verify 'FETCH_HEAD^{commit}'
 }
 
 write_update_state() {
   local bot_before="$1" cabinet_before="$2" bot_after="$3" cabinet_after="$4" backup="$5"
-  mkdir -p "$STATE_ROOT"
+  mkdir -p "$STATE_ROOT" || return 1
   {
     printf 'UPDATED_AT=%q\n' "$(date --iso-8601=seconds)"
     printf 'BOT_BEFORE=%q\n' "$bot_before"
@@ -26,7 +26,7 @@ write_update_state() {
     printf 'BOT_AFTER=%q\n' "$bot_after"
     printf 'CABINET_AFTER=%q\n' "$cabinet_after"
     printf 'BACKUP=%q\n' "$backup"
-  } >"$UPDATE_STATE"
+  } >"$UPDATE_STATE" || return 1
   chmod 600 "$UPDATE_STATE"
 }
 
@@ -40,8 +40,8 @@ restore_previous_components() {
   local bot_commit="$1"
   local cabinet_commit="$2"
   local backup="$3"
-  checkout_commit "$BOT_SOURCE_DIR" "$bot_commit"
-  checkout_commit "$CABINET_SOURCE_DIR" "$cabinet_commit"
+  checkout_commit "$BOT_SOURCE_DIR" "$bot_commit" || return 1
+  checkout_commit "$CABINET_SOURCE_DIR" "$cabinet_commit" || return 1
   if compose up -d --build --remove-orphans && wait_for_health 300; then
     warn "Предыдущая версия приложений восстановлена. Бэкап: $backup"
     return 0
@@ -55,7 +55,7 @@ update_components() {
   local component="${1:-all}"
   case "$component" in all | bot | cabinet) ;; *) die "Использование: bedolaga update [all|bot|cabinet]" ;; esac
   with_lock
-  load_stack_env
+  load_stack_env || return 1
   assert_clean_repo "$BOT_SOURCE_DIR" "Bot"
   assert_clean_repo "$CABINET_SOURCE_DIR" "Cabinet"
 
@@ -64,22 +64,33 @@ update_components() {
   cabinet_before="$(git_commit "$CABINET_SOURCE_DIR")"
   bot_after="$bot_before"
   cabinet_after="$cabinet_before"
-  [[ "$component" == all || "$component" == bot ]] && bot_after="$(remote_commit "$BOT_SOURCE_DIR" "${BOT_REF:-main}")"
-  [[ "$component" == all || "$component" == cabinet ]] && cabinet_after="$(remote_commit "$CABINET_SOURCE_DIR" "${CABINET_REF:-main}")"
+  if [[ "$component" == all || "$component" == bot ]]; then
+    bot_after="$(remote_commit "$BOT_SOURCE_DIR" "${BOT_REF:-main}")" || return 1
+  fi
+  if [[ "$component" == all || "$component" == cabinet ]]; then
+    cabinet_after="$(remote_commit "$CABINET_SOURCE_DIR" "${CABINET_REF:-main}")" || return 1
+  fi
 
   if [[ "$bot_before" == "$bot_after" && "$cabinet_before" == "$cabinet_after" ]]; then
     success "Уже установлены актуальные версии."
     return 0
   fi
 
-  backup="$(backup_create preupdate | tail -n 1)"
-  write_update_state "$bot_before" "$cabinet_before" "$bot_after" "$cabinet_after" "$backup"
+  backup="$(backup_create preupdate | tail -n 1)" || {
+    error "Обновление отменено: резервная копия не создана."
+    return 1
+  }
+  [[ -n "$backup" ]] || { error "Обновление отменено: не получен путь резервной копии."; return 1; }
+  write_update_state "$bot_before" "$cabinet_before" "$bot_after" "$cabinet_after" "$backup" || return 1
   info "Обновляю исходники в detached режиме."
-  [[ "$bot_before" == "$bot_after" ]] || checkout_commit "$BOT_SOURCE_DIR" "$bot_after"
-  [[ "$cabinet_before" == "$cabinet_after" ]] || checkout_commit "$CABINET_SOURCE_DIR" "$cabinet_after"
-  dotenv_merge_missing "$BOT_ENV" "$BOT_SOURCE_DIR/.env.example"
-  sanitize_bot_env
-  sync_bot_assets
+  if ! { { [[ "$bot_before" == "$bot_after" ]] || checkout_commit "$BOT_SOURCE_DIR" "$bot_after"; } &&
+    { [[ "$cabinet_before" == "$cabinet_after" ]] || checkout_commit "$CABINET_SOURCE_DIR" "$cabinet_after"; } &&
+    dotenv_merge_missing "$BOT_ENV" "$BOT_SOURCE_DIR/.env.example" && sanitize_bot_env && sync_bot_assets; }; then
+    error "Подготовка обновления не удалась. Возвращаю исходники."
+    checkout_commit "$BOT_SOURCE_DIR" "$bot_before" || true
+    checkout_commit "$CABINET_SOURCE_DIR" "$cabinet_before" || true
+    return 1
+  fi
 
   local -a build_services
   if [[ "$component" == all ]]; then
@@ -133,6 +144,7 @@ manager_latest_release_tag() {
     -o /dev/null -w '%{url_effective}' \
     "https://github.com/${BEDOLAGA_REPOSITORY}/releases/latest" 2>/dev/null)" || return 1
   final_url="${final_url%%\?*}"
+  [[ "$final_url" == "https://github.com/${BEDOLAGA_REPOSITORY}/releases/tag/"* ]] || return 1
   tag="${final_url##*/}"
   [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
   printf '%s\n' "$tag"
@@ -161,7 +173,7 @@ manager_release_notes() {
     fi
     [[ "$line" == '## '* ]] && break
     [[ "$line" == '- '* ]] || continue
-    note="${line#- }"
+    note="$(printf '%s' "${line#- }" | LC_ALL=C tr -d '\000-\010\013-\037\177')"
     printf '%s\n' "${note:0:180}"
     ((count += 1))
     [[ "$count" -ge 3 ]] && break
@@ -175,45 +187,62 @@ manager_update_check_due() {
   esac
   [[ "${BEDOLAGA_SKIP_UPDATE_CHECK:-0}" != 1 ]] || return 1
   local interval="${BEDOLAGA_UPDATE_CHECK_INTERVAL:-3600}" now checked_at
-  [[ "$interval" =~ ^[0-9]+$ ]] || interval=3600
+  [[ "$interval" =~ ^[0-9]{1,6}$ ]] || interval=3600
+  interval=$((10#$interval))
   [[ "$interval" -gt 0 && -f "$MANAGER_UPDATE_CHECK_STATE" ]] || return 0
   checked_at="$(stat -c '%Y' "$MANAGER_UPDATE_CHECK_STATE" 2>/dev/null || printf '0')"
   now="$(date +%s)"
-  ((now - checked_at >= interval))
+  ((checked_at > now || now - checked_at >= interval))
 }
 
 manager_record_update_check() {
   local result="${1:-unknown}"
-  ensure_runtime_dirs
-  printf '%s\n' "$result" >"$MANAGER_UPDATE_CHECK_STATE"
+  ensure_runtime_dirs || return 1
+  printf '%s\n' "$result" >"$MANAGER_UPDATE_CHECK_STATE" || return 1
   chmod 600 "$MANAGER_UPDATE_CHECK_STATE"
 }
 
-manager_install_release() {
-  local tag="$1" installer
+manager_install_release() (
+  # Subshell closes the operation lock and temporary files on every return path.
+  local tag="$1" installer temporary_root checksum_line checksum archive_name archive_url
   [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { error "Некорректный тег Manager: $tag"; return 1; }
-  installer="$(mktemp)"
+  command_exists flock || { error "Для безопасного обновления нужен flock (util-linux)."; return 1; }
+  with_lock
+  temporary_root="$(mktemp -d)" || return 1
+  trap 'rm -rf -- "$temporary_root"' EXIT
+  installer="$temporary_root/install.sh"
+  archive_name="bedolaga-manager-${tag}.tar.gz"
+  archive_url="https://github.com/${BEDOLAGA_REPOSITORY}/releases/download/${tag}/${archive_name}"
   info "Загружаю и проверяю Bedolaga Manager $tag."
   if ! curl -fsSL --retry 3 --connect-timeout 15 --max-time 60 \
     "https://raw.githubusercontent.com/${BEDOLAGA_REPOSITORY}/${tag}/install.sh" -o "$installer"; then
-    rm -f "$installer"
     error "Не удалось загрузить установщик $tag. Текущая версия не изменена."
     return 1
   fi
-  if ! grep -q '^#!/usr/bin/env bash' "$installer"; then
-    rm -f "$installer"
+  if ! grep -q '^#!/usr/bin/env bash' "$installer" || ! bash -n "$installer"; then
     error "Загружен некорректный install.sh. Текущая версия не изменена."
     return 1
   fi
-  chmod 700 "$installer"
-  if ! BEDOLAGA_REF="$tag" BEDOLAGA_NO_WIZARD=1 bash "$installer" --no-wizard; then
-    rm -f "$installer"
+  if ! curl -fsSL --retry 2 --connect-timeout 10 --max-time 30 \
+    "${archive_url}.sha256" -o "$temporary_root/checksum"; then
+    error "Не удалось получить SHA-256 релиза. Обновление отменено."
+    return 1
+  fi
+  checksum_line="$(cat "$temporary_root/checksum")"
+  if [[ ! "$checksum_line" =~ ^([a-fA-F0-9]{64})[[:blank:]]+\*?([^[:space:]]+)$ ]] ||
+    [[ "${BASH_REMATCH[2]}" != "$archive_name" ]]; then
+    error "Некорректная контрольная сумма релиза. Обновление отменено."
+    return 1
+  fi
+  checksum="${BASH_REMATCH[1]}"
+  if ! BEDOLAGA_REF="$tag" BEDOLAGA_NO_WIZARD=1 \
+    BEDOLAGA_ARCHIVE_URL="$archive_url" BEDOLAGA_ARCHIVE_SHA256="$checksum" \
+    BEDOLAGA_EXPECTED_VERSION="${tag#v}" bash "$installer" --no-wizard; then
     error "Обновление $tag не установлено. Manager сохранил предыдущую версию."
     return 1
   fi
-  rm -f "$installer"
   success "Bedolaga Manager обновлён: v${BEDOLAGA_VERSION} → ${tag}."
-}
+)
 
 manager_show_release() {
   local tag="$1" version="${1#v}"
@@ -230,18 +259,18 @@ manager_auto_update() {
   info "Проверяю стабильные обновления Bedolaga Manager..."
   local tag version
   if ! tag="$(manager_latest_release_tag)"; then
-    manager_record_update_check unavailable
+    manager_record_update_check unavailable || true
     warn "Не удалось проверить обновления. Продолжаю запуск текущей версии v${BEDOLAGA_VERSION}."
     return 0
   fi
   version="${tag#v}"
   if ! manager_version_is_newer "$version" "$BEDOLAGA_VERSION"; then
-    manager_record_update_check "$tag"
+    manager_record_update_check "$tag" || true
     return 0
   fi
   manager_show_release "$tag"
   if manager_install_release "$tag"; then
-    manager_record_update_check "$tag"
+    manager_record_update_check "$tag" || true
     return 10
   fi
   return 1
@@ -263,6 +292,6 @@ self_update() {
     return 0
   fi
   manager_show_release "$tag"
-  manager_install_release "$tag"
+  manager_install_release "$tag" || return 1
   manager_record_update_check "$tag"
 }

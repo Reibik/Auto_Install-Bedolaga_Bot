@@ -144,20 +144,19 @@ menu_choose_service() {
 
 menu() {
   require_root
-  local choice='' service='' update_status=0 manager_command=''
+  local choice='' service='' update_status=0
   if manager_auto_update; then
     :
   else
     update_status=$?
     if [[ "$update_status" -eq 10 ]]; then
       read_tty choice "\n${C_CYAN}Нажмите Enter, чтобы открыть обновлённый Manager...${C_RESET}"
-      export BEDOLAGA_SKIP_UPDATE_CHECK=1
-      manager_command="$(command -v bedolaga 2>/dev/null || printf '%s/bedolaga' "$BEDOLAGA_LIB_ROOT")"
-      exec "$manager_command" menu
+      exec env BEDOLAGA_SKIP_UPDATE_CHECK=1 bash "$BEDOLAGA_LIB_ROOT/bedolaga" menu
     fi
     warn "Автообновление не завершено. Открываю меню текущей версии v${BEDOLAGA_VERSION}."
     read_tty choice "${C_CYAN}Нажмите Enter для продолжения...${C_RESET}"
   fi
+  unset BEDOLAGA_SKIP_UPDATE_CHECK
   while true; do
     ui_clear
     ui_banner 'Единый центр управления Bot, Cabinet и Xray Monitoring'
