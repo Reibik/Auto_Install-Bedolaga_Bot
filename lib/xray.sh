@@ -327,10 +327,10 @@ xray_menu() {
       ui_menu_item 1 status 'Статус'
       ui_menu_item 2 start 'Запустить / применить настройки'
       ui_menu_item 3 logs 'Логи'
-      ui_menu_item 4 update 'Обновить образы'
+      ui_menu_item 4 update 'Обновить Checker и Status Page'
       ui_menu_item 5 config 'Перенастроить'
       ui_menu_item 6 stop 'Отключить с сохранением данных'
-      ui_menu_item 7 error 'Удалить полностью'
+      ui_danger_item 7 error 'Удалить модуль и данные'
     else
       ui_menu_item 1 deploy 'Установить модуль'
     fi

@@ -127,14 +127,24 @@ preflight() {
 
 service_state() {
   local service="$1"
-  local container_id state health
-  container_id="$(compose ps -a -q "$service" 2>/dev/null || true)"
+  local container_id state health exit_code details
+  if ! container_id="$(compose ps -a -q "$service" 2>/dev/null)"; then
+    printf 'unavailable/unknown\n'
+    return 1
+  fi
   if [[ -z "$container_id" ]]; then
     printf 'not-created\n'
     return 1
   fi
-  state="$(docker inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null || printf 'unknown')"
-  health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_id" 2>/dev/null || printf 'unknown')"
+  if ! details="$(docker inspect -f '{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}/{{.State.ExitCode}}' "$container_id" 2>/dev/null)"; then
+    printf 'unavailable/unknown\n'
+    return 1
+  fi
+  IFS=/ read -r state health exit_code <<<"$details"
+  if [[ "$state" == exited ]]; then
+    printf 'exited/%s\n' "${exit_code:-unknown}"
+    return 1
+  fi
   printf '%s/%s\n' "$state" "$health"
   [[ "$state" == running && "$health" != unhealthy ]]
 }

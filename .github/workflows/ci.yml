@@ -26,6 +26,7 @@ jobs:
           bash tests/lifecycle.sh
           bash tests/xray.sh
           bash tests/ui.sh
+          bash tests/menu.sh
           bash tests/manager-update.sh
           bash tests/installer.sh
           bash tests/backup.sh
@@ -84,6 +85,7 @@ jobs:
           bash tests/lifecycle.sh
           bash tests/xray.sh
           bash tests/ui.sh
+          bash tests/menu.sh
           bash tests/manager-update.sh
           bash tests/installer.sh
           bash tests/backup.sh

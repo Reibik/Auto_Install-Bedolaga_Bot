@@ -68,24 +68,33 @@ stack_status() {
     warn "Bedolaga ещё не установлен."
     return 1
   fi
-  local service state failures=0
+  local service state failures=0 inactive=0 pending=0
   ui_banner 'Состояние и версии компонентов'
   ui_section 'Состояние сервисов'
   while IFS= read -r service; do
     state="$(service_state "$service" 2>/dev/null || true)"
     ui_service_row "$service" "$state"
-    [[ "$state" == running/healthy || "$state" == running/none ]] || ((failures += 1))
+    case "$state" in
+      running/healthy | running/none) ;;
+      exited/0 | created/*) ((inactive += 1)) ;;
+      running/starting | restarting/* | paused/* | removing/*) ((pending += 1)) ;;
+      *) ((failures += 1)) ;;
+    esac
   done < <(managed_services)
   ui_section 'Версии'
   ui_key_value package 'Manager' "v${BEDOLAGA_VERSION}"
   ui_key_value package 'Bot commit' "$(git_short_commit "$BOT_SOURCE_DIR")"
   ui_key_value package 'Cabinet commit' "$(git_short_commit "$CABINET_SOURCE_DIR")"
   printf '\n'
-  if [[ "$failures" -eq 0 ]]; then
+  if [[ "$failures" -eq 0 && "$inactive" -eq 0 && "$pending" -eq 0 ]]; then
     success "Все компоненты работают нормально."
     return 0
   fi
-  error "Требуют внимания сервисов: $failures."
+  if [[ "$failures" -gt 0 ]]; then
+    error "Требуют внимания сервисов: $failures."
+  else
+    warn "Стек работает не полностью. Остановлены: $inactive; ожидают готовности: $pending."
+  fi
   ui_hint "Запустите диагностику: bedolaga doctor"
   return 1
 }
