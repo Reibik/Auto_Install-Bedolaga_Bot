@@ -220,6 +220,7 @@ CI проверяет Docker Compose и совместимость в Ubuntu 22.
 |---|---|
 | 💎 **TON** | `UQBoEJvftr-Lz4xZoXSDRlJQbaRC_nZoMhvbi9ufeiMNLTOb` |
 | 💵 **USDT TRC20** | `TRu92kG4LZ7nmubW3o31x19WagejmNt9PC` |
+| 💵 **USDT TON** | `UQBoEJvftr-Lz4xZoXSDRlJQbaRC_nZoMhvbi9ufeiMNLTOb` |
 | ₿ **BTC** | `bc1qy82xy9sqp2kq4rvqjqrvfdl9k0s7hvy7pk3rnt` |
 
 Перед отправкой проверьте адрес и сеть. Криптовалютные переводы необратимы. **Спасибо за поддержку! 💜**
